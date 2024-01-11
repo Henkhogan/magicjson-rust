@@ -21,6 +21,7 @@
     "str7key": "@",
     "str8key": "\"",
     "str9key": "'",
-    "str10key: "''",
-    "str11key: "'quoted'",
+    "str10key": "''",
+    "str11key": "'quoted'",
+    "str12key": "\\",
 }

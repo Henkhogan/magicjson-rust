@@ -1,15 +1,18 @@
 use pyo3::prelude::*;
+//use pyo3::AsPyPointer;
+use std::fmt;
 //use pyo3::types::PyDict;
 //use pyo3::types::iter::PyDictIterator;
 use std::io::Write;
-use std::{fs, ptr::null};
-use std::collections::HashMap;
+use std::fs;
 //use std::str::FromStr;
-use log::{debug, info, warn};
+use log::{debug, info};
 use chrono::Local;
 use env_logger::Builder;
 use log::LevelFilter;
 
+#[pyclass]
+#[derive(Clone, Copy, Debug)]
 enum ValueType {
     Null,
     List,
@@ -20,6 +23,23 @@ enum ValueType {
     Bool,
     CustomType,
 }
+
+impl fmt::Display for ValueType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {            
+            ValueType::Null => write!(f, "Null"),
+            ValueType::List => write!(f, "List"),
+            ValueType::Dict => write!(f, "Dict"),
+            ValueType::String => write!(f, "String"),
+            ValueType::Int => write!(f, "Int"),
+            ValueType::Float => write!(f, "Float"),
+            ValueType::Bool => write!(f, "Bool"),
+            ValueType::CustomType => write!(f, "CustomType"),
+        }
+    }
+}
+
+
 
 const QUOTE_CHARS: [u8; 2] = [
     0x22, // "
@@ -44,8 +64,10 @@ const COMMA_CHAR: u8 = 0x2C; // ,
 const DICT_START_CHAR: u8 = 0x7B; // {
 const DICT_END_CHAR: u8 = 0x7D; // }
 const DOT_CHAR: u8 = 0x2E; // .
+const ESCAPE_CHAR: u8 = 0x5C; // \
 const LIST_END_CHAR: u8 = 0x5D; // ]
-const LOOP_MAX_ITERATIONS: usize = 100;
+const LOOP_MAX_ITERATIONS: u16 = 100;
+const MAX_ITEMS: u16 = 100;
 
 const MINUS_CHAR: u8 = 0x2D; // -
 const PLUS_CHAR: u8 = 0x2B; // +
@@ -77,8 +99,8 @@ const NUMERIC_CHARS: [u8; 11] = [
     0x39, // 9
     ];
 
-
-struct JsonWrapper {
+#[pyclass]
+struct JsonStringWrapper {
     content: Vec<u8>,
     index: usize,
     //items: Vec<_JsonItem>,
@@ -93,7 +115,7 @@ trait JsonWrapperTrait {
     fn _find_key(&mut self) -> String;
 }
 
-impl JsonWrapperTrait for JsonWrapper{
+impl JsonWrapperTrait for JsonStringWrapper{
 
 
     fn end_reached(&self) -> bool {
@@ -181,7 +203,7 @@ impl JsonWrapperTrait for JsonWrapper{
 
  
 
-impl Iterator for JsonWrapper {
+impl Iterator for JsonStringWrapper {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -191,18 +213,29 @@ impl Iterator for JsonWrapper {
     }
 }
 
-
-trait JsonItem {}
-struct _JsonItem {
+#[pyclass]
+struct JsonItem {
     key: Option<String>,
-    value: Box<dyn JsonItem>,
+    value: Option<Vec<u8>>,
+    items: Option<Vec<JsonItem>>,
     value_type: ValueType,
     value_custom_type: Option<String>,
 }
 
+struct JsonWrapper {
+    top_level_type: ValueType,
+    children: Option<Vec<JsonItem>>,
+}
+
+impl IntoPy<PyObject> for JsonWrapper {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        self.top_level_type.into_py(py);
+        self.children.into_py(py)
+    }
+}
 
 
-fn handle_dict(json_wrapper: &mut JsonWrapper) {
+fn handle_dict(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     debug!("Found a dict");
     json_wrapper.skip_whitespace();
     let key = json_wrapper._find_key();
@@ -211,7 +244,8 @@ fn handle_dict(json_wrapper: &mut JsonWrapper) {
     json_wrapper.skip_colon();
     json_wrapper.skip_whitespace();
 
-    let max: u16 = 10;
+    let mut values: Vec<JsonItem> = Vec::new();
+
     let mut loop_index: u16 = 0;
     
     loop { 
@@ -225,8 +259,8 @@ fn handle_dict(json_wrapper: &mut JsonWrapper) {
             break;
         }
         
-        if max <= loop_index {
-            log::warn!("Reached max loops: {} at index {} with char \"{}\"({})", max, json_wrapper.index, x as char, x);
+        if MAX_ITEMS <= loop_index {
+            log::warn!("Reached max loops: {} at index {} with char \"{}\"({})", MAX_ITEMS, json_wrapper.index, x as char, x);
             break;
         }
 
@@ -251,7 +285,8 @@ fn handle_dict(json_wrapper: &mut JsonWrapper) {
         
         json_wrapper.skip_whitespace();
 
-        let dict = handle_any(json_wrapper);
+        values.push(handle_any(json_wrapper));
+        
         //return _JsonItem {
         //    key: Some(key),
         //    value: None,
@@ -259,11 +294,20 @@ fn handle_dict(json_wrapper: &mut JsonWrapper) {
         //    value_custom_type: None,
         //}
     }
+    return JsonItem {
+        key: None,
+        value: None,
+        items: Some(values),
+        value_type: ValueType::Dict,
+        value_custom_type: None,
+    }
 }
 
-fn handle_list(json_wrapper: &mut JsonWrapper) {
+fn handle_list(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     log::info!("Processing a list");
     json_wrapper.skip_whitespace();
+
+    let mut values: Vec<JsonItem> = Vec::new();
 
     let max: u16 = 10;
     let mut index: u16 = 0;
@@ -273,7 +317,7 @@ fn handle_list(json_wrapper: &mut JsonWrapper) {
         let x = json_wrapper.current().unwrap();
 
         
-        if x == 0x5D {
+        if x == LIST_END_CHAR {
             println!("Found list end at index {}",json_wrapper.index);
             json_wrapper.next();
             break;
@@ -292,19 +336,27 @@ fn handle_list(json_wrapper: &mut JsonWrapper) {
         
         json_wrapper.skip_whitespace();
 
-        handle_any(json_wrapper);
+        values.push(handle_any(json_wrapper));
+    }
+
+    return JsonItem {
+        key: None,
+        value: None,
+        items: Some(values),
+        value_type: ValueType::List,
+        value_custom_type: None,
     }
 }
 
 
-fn handle_dict_or_list(json_wrapper: &mut JsonWrapper) {
+fn handle_dict_or_list(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     match json_wrapper.current().unwrap() {
         DICT_START_CHAR => {
-            handle_dict(json_wrapper);
+            return handle_dict(json_wrapper);
         },
         0x5B => {
             json_wrapper.next();
-            handle_list(json_wrapper);
+            return handle_list(json_wrapper);
         },
         _ => {
             panic!("Expected a dict or list but instead found \"{}\"({}) at index {}", json_wrapper.current().unwrap() as char, json_wrapper.current().unwrap(), json_wrapper.index);
@@ -312,33 +364,60 @@ fn handle_dict_or_list(json_wrapper: &mut JsonWrapper) {
     }
 }
 
-fn handle_string(json_wrapper: &mut JsonWrapper, quote_char: u8) -> String {
+fn handle_string(json_wrapper: &mut JsonStringWrapper, quote_char: u8) -> Vec<u8> {
+
     log::debug!("Processing a string");
-    let mut escaped: bool = false;
     let mut value: Vec<u8> = Vec::new();
-    let mut index: usize = json_wrapper.index;
-    for c in json_wrapper.slice() {
-        index += 1;
-        if !escaped && *c == quote_char {
-            log::debug!("Found string end at index {}", index);
+    let mut c: u8;
+
+    loop {
+        c = json_wrapper.current().unwrap();
+
+        
+
+        if c == ESCAPE_CHAR {
+            debug!("Found escape char at index {}", json_wrapper.index);
+            value.push(c);
+            value.push(json_wrapper.next().unwrap());
+            json_wrapper.next();
+            continue;
+        }
+
+        if c == quote_char {
+            log::debug!("Found string end at index {}", json_wrapper.index);
+            json_wrapper.next();
             break;
         }
-        if !escaped {
-            value.push(*c);
-        }
-        if *c == 0x5C {
-            escaped = true;
-        }
-        continue;
+
+        value.push(c);
+        json_wrapper.next();
+
     }
 
-    json_wrapper.index = index;
-    let str_value = String::from_utf8(value).unwrap();
-    log::info!("Extracted string: \"{}\"", str_value);
-    return str_value
+    // for c in json_wrapper.slice() {
+    //     index += 1;
+    //     if !escaped && *c == quote_char {
+    //         log::debug!("Found string end at index {}", index);
+    //         break;
+    //     }
+    //     if !escaped {
+    //         value.push(*c);
+    //     }
+    //     if *c == ESCAPE_CHAR {
+    //         escaped = true;
+    //         debug!("Found escape char at index {}", index);
+    //         value.push(*c);
+    //     }
+    //     continue;
+    // }
+
+    // json_wrapper.index = index;
+    //let str_value = String::from_utf8(value).unwrap();
+    log::info!("Extracted string: \"{}\"", std::str::from_utf8(&value).unwrap());
+    return value;
 }
 
-fn handle_number(json_wrapper: &mut JsonWrapper) -> (ValueType, Vec<u8>, Option<Vec<u8>>) {
+fn handle_number(json_wrapper: &mut JsonStringWrapper) -> (ValueType, Vec<u8>) {
     log::debug!("Handling a number at index {}", json_wrapper.index);
     let mut value: Vec<u8> = Vec::new();
     let mut is_float: bool = false;
@@ -351,7 +430,7 @@ fn handle_number(json_wrapper: &mut JsonWrapper) -> (ValueType, Vec<u8>, Option<
         panic!("Expected a number but instead found \"{}\"({}) at index {}", c as char, c, json_wrapper.index);
     }
 
-    let mut _lix: usize = 0;
+    let mut _lix: u16 = 0;
     loop {
         //c = json_wrapper.current().unwrap();
 
@@ -385,12 +464,15 @@ fn handle_number(json_wrapper: &mut JsonWrapper) -> (ValueType, Vec<u8>, Option<
     }
 
 
-    log::info!("Extracted number: \"{}\". Current index: {}", std::str::from_utf8(&value).unwrap(), json_wrapper.index);
-    return (ValueType::Float, value, None);
+    log::info!("Extracted number: \"{}\". Float: {}. Current index: {}", std::str::from_utf8(&value).unwrap(), is_float, json_wrapper.index);
+    if is_float {
+        return (ValueType::Float, value);
+    }
+    return (ValueType::Int, value);
 
 }
 
-fn handle_custom_type(json_wrapper: &mut JsonWrapper) -> (String, String) {
+fn handle_custom_type(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     log::debug!("Processing a custom type");
 
     let mut type_id: Vec<u8> = Vec::new();
@@ -414,11 +496,17 @@ fn handle_custom_type(json_wrapper: &mut JsonWrapper) -> (String, String) {
     json_wrapper.index += 1;
     let value = handle_string(json_wrapper, quote_char);
     
-    log::info!("Found custom type type \"{}\" with value \"{}\" ", type_id_str, value);
-    return (value, type_id_str);
+    log::info!("Found custom type type \"{}\" with value \"{}\" ", type_id_str, std::str::from_utf8(&value).unwrap());
+    return JsonItem {
+        key: None,
+        value: Some(value),
+        items: None,
+        value_type: ValueType::CustomType,
+        value_custom_type: Some(type_id_str),
+    };
 }
 
-fn handle_null(json_wrapper: &mut JsonWrapper) {
+fn handle_null(json_wrapper: &mut JsonStringWrapper) {
     log::debug!("Suspecting a null");
     //let mut index: usize = json_wrapper.index;
     //let mut type_id: Vec<u8> = Vec::new();
@@ -440,7 +528,7 @@ fn handle_null(json_wrapper: &mut JsonWrapper) {
     
 }
 
-fn handle_bool(json_wrapper: &mut JsonWrapper, _true: bool) {
+fn handle_bool(json_wrapper: &mut JsonStringWrapper, _true: bool) {
     if _true {
         log::debug!("Suspecting true (bool)");
         for c in b"true" {
@@ -461,34 +549,69 @@ fn handle_bool(json_wrapper: &mut JsonWrapper, _true: bool) {
     }   
 }
 
-fn handle_any(json_wrapper: &mut JsonWrapper) {
+fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     let c = json_wrapper.current().unwrap();
     log::debug!("Found something starting with {}({}) at index {}", c, c as char, json_wrapper.index);
     match c {
         // " | '
         0x0022 | 0x0027  => {
             json_wrapper.next(); // Skipping the quote char
-            handle_string(json_wrapper, c);
+            return JsonItem {
+                key: None,
+                value: Some(handle_string(json_wrapper, c)),
+                items: None,
+                value_type: ValueType::String,
+                value_custom_type: None,
+            }
         },
         // Numbers - ToDo: Use arrays
-        DOT_CHAR | MINUS_CHAR | PLUS_CHAR | 0x0030..=0x0039 => {
-            handle_number(json_wrapper);
+        _ if DIGIT_CHARS.contains(&c) || [DOT_CHAR | MINUS_CHAR | PLUS_CHAR].contains(&c) => {
+            let x = handle_number(json_wrapper);
+            return JsonItem {
+                key: None,
+                value: Some(x.1),
+                items: None,
+                value_type: x.0,
+                value_custom_type: None,
+            };
         },
         // Null
         0x6e => {
             handle_null(json_wrapper);
+            return JsonItem {
+                key: None,
+                value: None,
+                items: None,
+                value_type: ValueType::Null,
+                value_custom_type: None,
+            };
         },
         // Bool: false
         0x66 => {
             handle_bool(json_wrapper, false);
+            return JsonItem {
+                key: None,
+                value: Some(b"0".to_vec()),
+                items: None,
+                value_type: ValueType::Bool,
+                value_custom_type: None,
+            };
+            
         }
         // Bool: true
         0x74 => {
             handle_bool(json_wrapper, true);
+            return JsonItem {
+                key: None,
+                value: Some(b"1".to_vec()),
+                items: None,
+                value_type: ValueType::Bool,
+                value_custom_type: None,
+            };
         }
         // Custom
         0x40 => {
-            handle_custom_type(json_wrapper);
+            return handle_custom_type(json_wrapper);            
         },
         _ => {
             handle_dict_or_list(json_wrapper)
@@ -512,26 +635,36 @@ struct ValueEnvelope{
 
 /// Formats the sum of two numbers as string.
 #[pyfunction]
-fn load_file(file_path: String) -> PyResult<HashMap<String, ValueEnvelope>> {
+fn load_file(file_path: String) -> PyResult<JsonWrapper> {
 
     //let contents = fs::read(file_path)
     //.expect("Should have been able to read the file");
 
-    let mut json_wrapper = JsonWrapper {
+    let mut json_wrapper = JsonStringWrapper {
         content: fs::read(file_path).unwrap(),
         index: 0,
     };
 
 
-    let dict: HashMap<String, ValueEnvelope> = HashMap::new();
 
     // Skip forward the first non-whitespace character
     json_wrapper.skip_whitespace();
-    handle_dict_or_list(&mut json_wrapper);
-
-    Ok(dict)
+    
+    let top_level_item = handle_dict_or_list(&mut json_wrapper);
+    
+    match top_level_item.value_type {
+        ValueType::Dict | ValueType::List => {
+            info!("Returning {} with {} items", top_level_item.value_type, top_level_item.items.as_ref().unwrap().len());
+            return Ok(JsonWrapper {
+                top_level_type: top_level_item.value_type,
+                children: top_level_item.items,
+            });
+        },
+        __cause__ => {
+            panic!("Expected a dict or list but instead found \"{}\" at index {}", json_wrapper.current().unwrap() as char, json_wrapper.index);
+        }
+    }
 }
-
 
 #[pyfunction]
 fn loads(a: usize, b: usize) -> PyResult<String> {
