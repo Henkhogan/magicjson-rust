@@ -1,6 +1,8 @@
-use pyo3::{prelude::*, ffi::PyObject};
+use pyo3::{prelude::*, ffi::PyObject, types::PyByteArray};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 //use pyo3::AsPyPointer;
-use std::fmt;
+use std::{fmt, hash::Hash};
 //use pyo3::types::PyDict;
 //use pyo3::types::iter::PyDictIterator;
 use std::io::Write;
@@ -19,7 +21,7 @@ mod constants;
 use constants::{DIGIT_CHARS, WHITESPACE_CHARS, QUOTE_CHARS, DICT_START_CHAR, DICT_END_CHAR, LIST_START_CHAR, LIST_END_CHAR, COMMA_CHAR, DOT_CHAR, MINUS_CHAR, PLUS_CHAR, ESCAPE_CHAR, AFTER_NULL_CHARS, LOOP_MAX_ITERATIONS, MAX_ITEMS, NUMERIC_CHARS};
 
 #[pyclass(module="magicjson")]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Hash)]
 enum JsonType {
     Null,
     List,
@@ -29,6 +31,15 @@ enum JsonType {
     Float,
     Bool,
     CustomType,
+}
+
+#[pymethods]
+impl JsonType {
+    fn __hash__(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.hash(&mut hasher);
+        hasher.finish()
+    }
 }
 
 impl fmt::Display for JsonType {
@@ -52,6 +63,7 @@ impl fmt::Display for JsonType {
 #[derive(Clone, Debug)]
 struct JsonItem {
     key: Option<String>,
+    // value should be converted to bytearray but is currently a list of bytes
     value: Option<Vec<u8>>,
     items: Option<Vec<JsonItem>>,
     value_type: JsonType,
@@ -59,10 +71,16 @@ struct JsonItem {
 }
 
 
-//impl IntoPy<PyObject> for JsonWrapper {
+//impl IntoPy<PyObject> for JsonItem {
 //    fn into_py(self, py: Python<'_>) -> PyObject {
-//        pyo3::IntoPy::into_py(pyo3::Py::new(py, self).unwrap(), py)
+//        return PyObject {
+//            key: self.key.into_py(py);
+//            let value = self.value.into_py(py);
+//            let items = self.items.into_py(py);
+//            let value_type = self.value_type.into_py(py);
+//            let value_custom_type = self.value_custom_type.into_py(py);
 //
+//        }
 //        //self.top_level_type.into_py(py),
 //        //self.children.unwrap().into_py(py)
 //    }
@@ -144,20 +162,20 @@ fn handle_list(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> Json
 
         
         if x == LIST_END_CHAR {
-            println!("Found list end at index {}",json_wrapper.index);
+            info!("Found list end at index {}",json_wrapper.index);
             json_wrapper.next();
             break;
         }
         
         if max <= index {
-            println!("Reached max loops: {} at index {} with char \"{}\"({})", max, json_wrapper.index, x as char, x);
-            break;
+            panic!("Reached max loops: {} at index {} with char \"{}\"({})", max, json_wrapper.index, x as char, x);
+            
         }
 
         json_wrapper.skip_whitespace();
         if x == 0x2C {
             json_wrapper.next();
-            println!("(List) Found a comma at index {}", json_wrapper.index);
+            info!("(List) Found a comma at index {}", json_wrapper.index);
         }
         
         json_wrapper.skip_whitespace();
@@ -496,17 +514,20 @@ fn dumps(a: usize, b: usize) -> PyResult<String> {
 #[pymodule]
 fn magicjson(_py: Python, m: &PyModule) -> PyResult<()> {
     
-    Builder::new()
-    .format(|buf, record| {
-        writeln!(buf,
-            "{} [{}] - {}",
-            Local::now().format("%Y-%m-%dT%H:%M:%S"),
-            record.level(),
-            record.args()
-        )
-    })
-    .filter(None, LevelFilter::Debug)
-    .init();
+    //Builder::new()
+    //.format(|buf, record| {
+    //    writeln!(buf,
+    //        "{} [{}] - {}",
+    //        Local::now().format("%Y-%m-%dT%H:%M:%S"),
+    //        record.level(),
+    //        record.args()
+    //    )
+    //})
+    //.filter(None, LevelFilter::Debug)
+    //.init();
+
+    pyo3_log::init();
+
 
     //pyo3_log::init();
     m.add_class::<JsonItem>()?;

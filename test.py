@@ -1,9 +1,19 @@
 import logging
+import timeit
+import json
 
-logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.ERROR)
 from magicjson import JsonItem, JsonType, parse_rust_input, load_file
+
 x = load_file("tests/test1.json")
 
+def load_file_rust():
+    parse_rust_input(load_file("tests/test0.json"))
+
+def load_file_builtin():
+    with open("tests/test0.json", "r") as f:
+        json.load(f)
 """
 y = parse_rust_input(
     input = JsonItem(
@@ -140,3 +150,6 @@ y = parse_rust_input(
 """
 
 print(parse_rust_input(x))
+
+print(timeit.timeit(load_file_rust, number=1000))
+print(timeit.timeit(load_file_builtin, number=1000))

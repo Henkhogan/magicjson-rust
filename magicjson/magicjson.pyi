@@ -2,15 +2,7 @@ from typing import Iterable
 from enum import Enum
 
 class JsonType(Enum):
-    Null = 0
-    List = 1
-    Dict = 2
-    String = 3
-    Int = 4
-    Float = 5
-    Bool = 6
-    CustomType = 7
-
+    def __hash__(self) -> int: ...
 
 class JsonItem(object):
 
