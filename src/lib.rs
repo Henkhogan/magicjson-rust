@@ -222,12 +222,6 @@ struct JsonItem {
     value_custom_type: Option<String>,
 }
 
-#[pyclass(get_all)]
-#[derive(Clone, Debug)]
-struct JsonWrapper {
-    top_level_type: JsonType,
-    children: Option<Vec<JsonItem>>,
-}
 
 //impl IntoPy<PyObject> for JsonWrapper {
 //    fn into_py(self, py: Python<'_>) -> PyObject {
@@ -627,7 +621,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
 
 /// Formats the sum of two numbers as string.
 #[pyfunction]
-fn load_file(file_path: String) -> JsonWrapper {
+fn load_file(file_path: String) -> JsonItem {
 
     //let contents = fs::read(file_path)
     //.expect("Should have been able to read the file");
@@ -647,10 +641,7 @@ fn load_file(file_path: String) -> JsonWrapper {
     match top_level_item.value_type {
         JsonType::Dict | JsonType::List => {
             info!("Returning {} with {} items", top_level_item.value_type, top_level_item.items.as_ref().unwrap().len());
-            return JsonWrapper {
-                top_level_type: top_level_item.value_type,
-                children: top_level_item.items,
-            };
+            return top_level_item
         },
         __cause__ => {
             panic!("Expected a dict or list but instead found \"{}\" at index {}", json_wrapper.current().unwrap() as char, json_wrapper.index);
@@ -690,7 +681,6 @@ fn magicjson_rust(_py: Python, m: &PyModule) -> PyResult<()> {
     .init();
 
     //pyo3_log::init();
-    m.add_class::<JsonWrapper>()?;
     m.add_class::<JsonItem>()?;
     m.add_class::<JsonType>()?;
 
