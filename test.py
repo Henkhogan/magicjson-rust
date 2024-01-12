@@ -1,23 +1,10 @@
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
-import magicjson_rust as magicjson
+from magicjson import JsonItem, JsonType, parse_rust_input, load_file
+x = load_file("tests/test1.json")
 
-x = magicjson.load_file("tests/test1.json")
-
-from pysrc import parse_rust_input, JsonType, JsonItem
-
-DICT_ID = 0
-LIST_ID = 1
-STRING_ID = 2
-INT_ID = 3
-FLOAT_ID = 4
-BOOL_ID = 5
-NULL_ID = 6
-CUSTOM_TYPE_ID = 7
-
-#parse_rust_input(x[0])
-
+"""
 y = parse_rust_input(
     input = JsonItem(
         key=None,
@@ -150,6 +137,6 @@ y = parse_rust_input(
         ),
     )
 )
-
+"""
 
 print(parse_rust_input(x))

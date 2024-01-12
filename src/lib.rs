@@ -11,7 +11,14 @@ use chrono::Local;
 use env_logger::Builder;
 use log::LevelFilter;
 
-#[pyclass]
+mod wrapper;
+use wrapper::{JsonBytesWrapper, JsonWrapperTrait};
+
+
+mod constants;
+use constants::{DIGIT_CHARS, WHITESPACE_CHARS, QUOTE_CHARS, DICT_START_CHAR, DICT_END_CHAR, LIST_START_CHAR, LIST_END_CHAR, COMMA_CHAR, DOT_CHAR, MINUS_CHAR, PLUS_CHAR, ESCAPE_CHAR, AFTER_NULL_CHARS, LOOP_MAX_ITERATIONS, MAX_ITEMS, NUMERIC_CHARS};
+
+#[pyclass(module="magicjson")]
 #[derive(Clone, Copy, Debug)]
 enum JsonType {
     Null,
@@ -41,178 +48,7 @@ impl fmt::Display for JsonType {
 
 
 
-const QUOTE_CHARS: [u8; 2] = [
-    0x22, // "
-    0x27, // '
-    ];
-
-const WHITESPACE_CHARS: [u8; 4] = [
-    0x20, // ' '
-    0x0A, // '\n'
-    0x09, // '\t'
-    0x0D, // '\r'
-    ];
-
-const AFTER_NULL_CHARS: [u8; 3] = [
-    0x7D, // }
-    0x5D, // ]
-    0x2C, // ,
-    ];
-
-const COLON_CHAR: u8 = 0x3A; // :
-const COMMA_CHAR: u8 = 0x2C; // ,
-const DICT_START_CHAR: u8 = 0x7B; // {
-const DICT_END_CHAR: u8 = 0x7D; // }
-const DOT_CHAR: u8 = 0x2E; // .
-const ESCAPE_CHAR: u8 = 0x5C; // \
-const LIST_END_CHAR: u8 = 0x5D; // ]
-const LOOP_MAX_ITERATIONS: u16 = 100;
-const MAX_ITEMS: u16 = 100;
-
-const MINUS_CHAR: u8 = 0x2D; // -
-const PLUS_CHAR: u8 = 0x2B; // +
-
-const DIGIT_CHARS: [u8; 10] = [
-    0x30, // 0
-    0x31, // 1
-    0x32, // 2
-    0x33, // 3
-    0x34, // 4
-    0x35, // 5
-    0x36, // 6
-    0x37, // 7
-    0x38, // 8
-    0x39, // 9
-    ];
-
-const NUMERIC_CHARS: [u8; 11] = [
-    0x2E, // .
-    0x30, // 0
-    0x31, // 1
-    0x32, // 2
-    0x33, // 3
-    0x34, // 4
-    0x35, // 5
-    0x36, // 6
-    0x37, // 7
-    0x38, // 8
-    0x39, // 9
-    ];
-
-struct JsonStringWrapper {
-    content: Vec<u8>,
-    index: usize,
-    //items: Vec<_JsonItem>,
-}
-
-trait JsonWrapperTrait {
-    fn end_reached(&self) -> bool;
-    fn slice(&self) -> &[u8];
-    fn current(&self) -> Option<u8>;
-    fn skip_whitespace(&mut self);
-    fn skip_colon(&mut self);
-    fn _find_key(&mut self) -> String;
-}
-
-impl JsonWrapperTrait for JsonStringWrapper{
-
-
-    fn end_reached(&self) -> bool {
-        return self.index+1 >= self.content.len();
-    }
-    fn slice(&self) -> &[u8] {
-        return &self.content[self.index..];
-    }
-
-    fn current(&self) -> Option<u8> {
-        return Some(self.content[self.index]);
-    }
-
-    fn skip_whitespace(&mut self) {
-
-        let start_index = self.index;
-        debug!("Entering skip_whitespace at index {} with char: {}", start_index, self.current().unwrap() as char);
-
-        while WHITESPACE_CHARS.contains(&self.current().unwrap()) {
-            self.next().unwrap();
-        }
-        
-        if self.index > start_index {
-            debug!("(Skip Whitespace) Shifted index from {} to {} at char \"{}\"({})", start_index, self.index, self.current().unwrap() as char, self.current().unwrap());
-        }
-    }
-
-    fn skip_colon(&mut self) {
-        if self.current().unwrap() != COLON_CHAR {
-            panic!("Expected a colon but instead found \"{}\"({}) at index {}", self.current().unwrap() as char, self.current().unwrap(), self.index);
-        }
-        debug!("Found a colon at index {}", self.index);
-        self.index += 1;
-        debug!("(Skip colon) Shifted index to {}", self.index);
-    }
-
-    fn _find_key(&mut self) -> String {
-
-        debug!("Searching key starting at index {}", self.index);
-
-        let mut quote_char: u8 = 0x00;
-        let mut index: usize = self.index;
-        for c in self.slice() { 
-            index += 1;
-            if QUOTE_CHARS.contains(&c) {
-                quote_char = *c;
-                break;
-            }
-        }
-        self.index = index;
-    
-    
-        let mut key:Vec<u8>  = Vec::new();
-        let mut escaped: bool = false;
-    
-        for c in self.slice() {
-            index += 1;
-            // If already escaped we just push the char and reset the flag
-            if escaped {
-                key.push(*c);
-                escaped = false;
-                continue;
-            }
-            // If we find the escape char we set the flag and continue
-            if *c == 0x005C {
-                key.push(*c);
-                escaped = true;
-                continue;
-            }
-            // If we find the quote char we reached the end of the key
-            if *c == quote_char {
-                break;
-            }
-            key.push(*c);
-            continue;
-        }
-        self.index = index;
-
-  
-    
-        return String::from_utf8(key).unwrap();
-    }
-}
-
-
- 
-
-impl Iterator for JsonStringWrapper {
-    type Item = u8;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        let c = self.content[self.index];
-        self.index += 1;
-        return Some(c);
-    }
-}
-
-#[pyclass(get_all)]
+#[pyclass(module="magicjson", get_all)]
 #[derive(Clone, Debug)]
 struct JsonItem {
     key: Option<String>,
@@ -233,10 +69,10 @@ struct JsonItem {
 //}
 
 
-fn handle_dict(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
+fn handle_dict(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
     debug!("Found a dict");
     json_wrapper.skip_whitespace();
-    let key = json_wrapper._find_key();
+    let mut ikey = json_wrapper.find_key();
     info!("Found key: {:?}", key);
     json_wrapper.skip_whitespace();
     json_wrapper.skip_colon();
@@ -250,7 +86,6 @@ fn handle_dict(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         loop_index += 1;
         json_wrapper.skip_whitespace();
         let x = json_wrapper.current().unwrap();
-
         
         if x == DICT_END_CHAR {
             log::info!("Found dict end at index {}", json_wrapper.index);
@@ -274,26 +109,19 @@ fn handle_dict(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
                     break;
                 }
             }
-            let key = json_wrapper._find_key();
-            log::info!("Found key: {:?}", key);
+            ikey = json_wrapper.find_key();
+            log::info!("Found key: {:?}", ikey);
             json_wrapper.skip_whitespace();
             json_wrapper.skip_colon();
             continue;
         }
         
         json_wrapper.skip_whitespace();
-
-        values.push(handle_any(json_wrapper));
-        
-        //return _JsonItem {
-        //    key: Some(key),
-        //    value: None,
-        //    value_type: ValueType::Dict,
-        //    value_custom_type: None,
-        //}
+        values.push(handle_any(json_wrapper, Some(ikey.clone())));  
     }
+    
     return JsonItem {
-        key: None,
+        key: key,
         value: None,
         items: Some(values),
         value_type: JsonType::Dict,
@@ -301,7 +129,7 @@ fn handle_dict(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     }
 }
 
-fn handle_list(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
+fn handle_list(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
     log::info!("Processing a list");
     json_wrapper.skip_whitespace();
 
@@ -334,11 +162,11 @@ fn handle_list(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         
         json_wrapper.skip_whitespace();
 
-        values.push(handle_any(json_wrapper));
+        values.push(handle_any(json_wrapper, None));
     }
 
     return JsonItem {
-        key: None,
+        key: key,
         value: None,
         items: Some(values),
         value_type: JsonType::List,
@@ -347,14 +175,14 @@ fn handle_list(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
 }
 
 
-fn handle_dict_or_list(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
+fn handle_dict_or_list(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
     match json_wrapper.current().unwrap() {
         DICT_START_CHAR => {
-            return handle_dict(json_wrapper);
+            return handle_dict(json_wrapper, key);
         },
-        0x5B => {
+        LIST_START_CHAR => {
             json_wrapper.next();
-            return handle_list(json_wrapper);
+            return handle_list(json_wrapper, key);
         },
         _ => {
             panic!("Expected a dict or list but instead found \"{}\"({}) at index {}", json_wrapper.current().unwrap() as char, json_wrapper.current().unwrap(), json_wrapper.index);
@@ -362,7 +190,7 @@ fn handle_dict_or_list(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     }
 }
 
-fn handle_string(json_wrapper: &mut JsonStringWrapper, quote_char: u8) -> Vec<u8> {
+fn handle_string(json_wrapper: &mut JsonBytesWrapper, quote_char: u8) -> Vec<u8> {
 
     log::debug!("Processing a string");
     let mut value: Vec<u8> = Vec::new();
@@ -415,7 +243,7 @@ fn handle_string(json_wrapper: &mut JsonStringWrapper, quote_char: u8) -> Vec<u8
     return value;
 }
 
-fn handle_number(json_wrapper: &mut JsonStringWrapper) -> (JsonType, Vec<u8>) {
+fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> (JsonType, Vec<u8>) {
     log::debug!("Handling a number at index {}", json_wrapper.index);
     let mut value: Vec<u8> = Vec::new();
     let mut is_float: bool = false;
@@ -470,7 +298,7 @@ fn handle_number(json_wrapper: &mut JsonStringWrapper) -> (JsonType, Vec<u8>) {
 
 }
 
-fn handle_custom_type(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
+fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
     log::debug!("Processing a custom type");
 
     let mut type_id: Vec<u8> = Vec::new();
@@ -496,7 +324,7 @@ fn handle_custom_type(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     
     log::info!("Found custom type type \"{}\" with value \"{}\" ", type_id_str, std::str::from_utf8(&value).unwrap());
     return JsonItem {
-        key: None,
+        key: key,
         value: Some(value),
         items: None,
         value_type: JsonType::CustomType,
@@ -504,7 +332,7 @@ fn handle_custom_type(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
     };
 }
 
-fn handle_null(json_wrapper: &mut JsonStringWrapper) {
+fn handle_null(json_wrapper: &mut JsonBytesWrapper) {
     log::debug!("Suspecting a null");
     //let mut index: usize = json_wrapper.index;
     //let mut type_id: Vec<u8> = Vec::new();
@@ -526,7 +354,7 @@ fn handle_null(json_wrapper: &mut JsonStringWrapper) {
     
 }
 
-fn handle_bool(json_wrapper: &mut JsonStringWrapper, _true: bool) {
+fn handle_bool(json_wrapper: &mut JsonBytesWrapper, _true: bool) {
     if _true {
         log::debug!("Suspecting true (bool)");
         for c in b"true" {
@@ -547,7 +375,7 @@ fn handle_bool(json_wrapper: &mut JsonStringWrapper, _true: bool) {
     }   
 }
 
-fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
+fn handle_any(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
     let c = json_wrapper.current().unwrap();
     log::debug!("Found something starting with {}({}) at index {}", c, c as char, json_wrapper.index);
     match c {
@@ -555,7 +383,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         0x0022 | 0x0027  => {
             json_wrapper.next(); // Skipping the quote char
             return JsonItem {
-                key: None,
+                key: key,
                 value: Some(handle_string(json_wrapper, c)),
                 items: None,
                 value_type: JsonType::String,
@@ -566,7 +394,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         _ if DIGIT_CHARS.contains(&c) || [DOT_CHAR | MINUS_CHAR | PLUS_CHAR].contains(&c) => {
             let x = handle_number(json_wrapper);
             return JsonItem {
-                key: None,
+                key: key,
                 value: Some(x.1),
                 items: None,
                 value_type: x.0,
@@ -577,7 +405,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         0x6e => {
             handle_null(json_wrapper);
             return JsonItem {
-                key: None,
+                key: key,
                 value: None,
                 items: None,
                 value_type: JsonType::Null,
@@ -588,7 +416,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         0x66 => {
             handle_bool(json_wrapper, false);
             return JsonItem {
-                key: None,
+                key: key,
                 value: Some(b"0".to_vec()),
                 items: None,
                 value_type: JsonType::Bool,
@@ -600,7 +428,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         0x74 => {
             handle_bool(json_wrapper, true);
             return JsonItem {
-                key: None,
+                key: key,
                 value: Some(b"1".to_vec()),
                 items: None,
                 value_type: JsonType::Bool,
@@ -609,10 +437,10 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         }
         // Custom
         0x40 => {
-            return handle_custom_type(json_wrapper);            
+            return handle_custom_type(json_wrapper, key);            
         },
         _ => {
-            handle_dict_or_list(json_wrapper)
+            handle_dict_or_list(json_wrapper, key)
         }
     }
 
@@ -626,7 +454,7 @@ fn load_file(file_path: String) -> JsonItem {
     //let contents = fs::read(file_path)
     //.expect("Should have been able to read the file");
 
-    let mut json_wrapper = JsonStringWrapper {
+    let mut json_wrapper = JsonBytesWrapper {
         content: fs::read(file_path).unwrap(),
         index: 0,
     };
@@ -636,7 +464,7 @@ fn load_file(file_path: String) -> JsonItem {
     // Skip forward the first non-whitespace character
     json_wrapper.skip_whitespace();
     
-    let top_level_item = handle_dict_or_list(&mut json_wrapper);
+    let top_level_item = handle_dict_or_list(&mut json_wrapper, None);
     
     match top_level_item.value_type {
         JsonType::Dict | JsonType::List => {
@@ -666,7 +494,7 @@ fn dumps(a: usize, b: usize) -> PyResult<String> {
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn magicjson_rust(_py: Python, m: &PyModule) -> PyResult<()> {
+fn magicjson(_py: Python, m: &PyModule) -> PyResult<()> {
     
     Builder::new()
     .format(|buf, record| {
