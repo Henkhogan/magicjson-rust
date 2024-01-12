@@ -1,6 +1,8 @@
-from typing import Generator, NamedTuple
+from typing import Iterable, NamedTuple
 from dataclasses import dataclass
 from enum import Enum
+import magicjson_rust as magicjson
+
 
 class ValueType(Enum):
     Null = 0
@@ -13,9 +15,10 @@ class ValueType(Enum):
     CustomType = 7
 
 
-class JsonItemWrapper(NamedTuple):
+class JsonItem(NamedTuple):
     key: str | None
-    value: str
+    value: str | None
+    items: Iterable["JsonItem"] | None
     value_type: ValueType
     value_custom_type: str
 
@@ -23,19 +26,25 @@ class JsonItemWrapper(NamedTuple):
 @dataclass
 class JsonWrapper:
     top_level_type: ValueType
-    children: Generator[JsonItemWrapper, None, None]
+    children: Iterable[JsonItem]
 
     def __next__(self):
         return next(self.children)
 
 
-def parse_rust_item(item: JsonItemWrapper):
+def parse_rust_item(item: JsonItem, mandatory_key: bool = False):
+    '''
+        mandatory_key: bool - raises KeyError when item.key is None
+    '''
+    if mandatory_key and item.key is None:
+        raise KeyError(f'key is mandatory for item: {item}')
+
     if item.value_type == ValueType.Null:
         return None
     elif item.value_type == ValueType.List:
-        return parse_rust_generator(item)
+        return parse_rust_list(item.value)
     elif item.value_type == ValueType.Dict:
-        return parse_rust_generator(item)
+        return parse_rust_dict(item.value)
     elif item.value_type == ValueType.String:
         return item.value
     elif item.value_type == ValueType.Int:
@@ -49,17 +58,18 @@ def parse_rust_item(item: JsonItemWrapper):
     else:
         raise Exception("Invalid value type")
     
-def parse_rust_generator(input: Generator[JsonItemWrapper, None, None]):
-    for item in input:
-        yield parse_rust_item(item)
 
-def parse_rust_input(input: Generator[JsonItemWrapper, None, None]):
-    first = next(input)
-    if first.value_type == ValueType.List:
-        return parse_rust_generator(input)
-    elif first.value_type == ValueType.Dict:
-        return parse_rust_generator(input)
-    else:
-        raise Exception("Invalid input type") 
+def parse_rust_list(iterable: Iterable[JsonItem]):
+    return [parse_rust_item(item) for item in iterable]
+ 
+def parse_rust_dict(iterable: Iterable[JsonItem]):
+    return {item.key: parse_rust_item(item, mandatory_key=True) for item in iterable}
+
+def parse_rust_input(input: JsonWrapper):
+    if input.top_level_type == ValueType.Dict:
+        return parse_rust_dict(input.children)
+    if input.top_level_type == ValueType.List:
+        return parse_rust_list(input.children)
+    raise ValueError("Invalid input type") 
     
 

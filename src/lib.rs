@@ -1,4 +1,4 @@
-use pyo3::prelude::*;
+use pyo3::{prelude::*, ffi::PyObject};
 //use pyo3::AsPyPointer;
 use std::fmt;
 //use pyo3::types::PyDict;
@@ -13,7 +13,7 @@ use log::LevelFilter;
 
 #[pyclass]
 #[derive(Clone, Copy, Debug)]
-enum ValueType {
+enum JsonType {
     Null,
     List,
     Dict,
@@ -24,17 +24,17 @@ enum ValueType {
     CustomType,
 }
 
-impl fmt::Display for ValueType {
+impl fmt::Display for JsonType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {            
-            ValueType::Null => write!(f, "Null"),
-            ValueType::List => write!(f, "List"),
-            ValueType::Dict => write!(f, "Dict"),
-            ValueType::String => write!(f, "String"),
-            ValueType::Int => write!(f, "Int"),
-            ValueType::Float => write!(f, "Float"),
-            ValueType::Bool => write!(f, "Bool"),
-            ValueType::CustomType => write!(f, "CustomType"),
+            JsonType::Null => write!(f, "Null"),
+            JsonType::List => write!(f, "List"),
+            JsonType::Dict => write!(f, "Dict"),
+            JsonType::String => write!(f, "String"),
+            JsonType::Int => write!(f, "Int"),
+            JsonType::Float => write!(f, "Float"),
+            JsonType::Bool => write!(f, "Bool"),
+            JsonType::CustomType => write!(f, "CustomType"),
         }
     }
 }
@@ -99,7 +99,6 @@ const NUMERIC_CHARS: [u8; 11] = [
     0x39, // 9
     ];
 
-#[pyclass]
 struct JsonStringWrapper {
     content: Vec<u8>,
     index: usize,
@@ -213,26 +212,31 @@ impl Iterator for JsonStringWrapper {
     }
 }
 
-#[pyclass]
+#[pyclass(get_all)]
+#[derive(Clone, Debug)]
 struct JsonItem {
     key: Option<String>,
     value: Option<Vec<u8>>,
     items: Option<Vec<JsonItem>>,
-    value_type: ValueType,
+    value_type: JsonType,
     value_custom_type: Option<String>,
 }
 
+#[pyclass(get_all)]
+#[derive(Clone, Debug)]
 struct JsonWrapper {
-    top_level_type: ValueType,
+    top_level_type: JsonType,
     children: Option<Vec<JsonItem>>,
 }
 
-impl IntoPy<PyObject> for JsonWrapper {
-    fn into_py(self, py: Python<'_>) -> PyObject {
-        self.top_level_type.into_py(py);
-        self.children.into_py(py)
-    }
-}
+//impl IntoPy<PyObject> for JsonWrapper {
+//    fn into_py(self, py: Python<'_>) -> PyObject {
+//        pyo3::IntoPy::into_py(pyo3::Py::new(py, self).unwrap(), py)
+//
+//        //self.top_level_type.into_py(py),
+//        //self.children.unwrap().into_py(py)
+//    }
+//}
 
 
 fn handle_dict(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
@@ -298,7 +302,7 @@ fn handle_dict(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         key: None,
         value: None,
         items: Some(values),
-        value_type: ValueType::Dict,
+        value_type: JsonType::Dict,
         value_custom_type: None,
     }
 }
@@ -343,7 +347,7 @@ fn handle_list(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         key: None,
         value: None,
         items: Some(values),
-        value_type: ValueType::List,
+        value_type: JsonType::List,
         value_custom_type: None,
     }
 }
@@ -417,7 +421,7 @@ fn handle_string(json_wrapper: &mut JsonStringWrapper, quote_char: u8) -> Vec<u8
     return value;
 }
 
-fn handle_number(json_wrapper: &mut JsonStringWrapper) -> (ValueType, Vec<u8>) {
+fn handle_number(json_wrapper: &mut JsonStringWrapper) -> (JsonType, Vec<u8>) {
     log::debug!("Handling a number at index {}", json_wrapper.index);
     let mut value: Vec<u8> = Vec::new();
     let mut is_float: bool = false;
@@ -466,9 +470,9 @@ fn handle_number(json_wrapper: &mut JsonStringWrapper) -> (ValueType, Vec<u8>) {
 
     log::info!("Extracted number: \"{}\". Float: {}. Current index: {}", std::str::from_utf8(&value).unwrap(), is_float, json_wrapper.index);
     if is_float {
-        return (ValueType::Float, value);
+        return (JsonType::Float, value);
     }
-    return (ValueType::Int, value);
+    return (JsonType::Int, value);
 
 }
 
@@ -501,7 +505,7 @@ fn handle_custom_type(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
         key: None,
         value: Some(value),
         items: None,
-        value_type: ValueType::CustomType,
+        value_type: JsonType::CustomType,
         value_custom_type: Some(type_id_str),
     };
 }
@@ -560,7 +564,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
                 key: None,
                 value: Some(handle_string(json_wrapper, c)),
                 items: None,
-                value_type: ValueType::String,
+                value_type: JsonType::String,
                 value_custom_type: None,
             }
         },
@@ -582,7 +586,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
                 key: None,
                 value: None,
                 items: None,
-                value_type: ValueType::Null,
+                value_type: JsonType::Null,
                 value_custom_type: None,
             };
         },
@@ -593,7 +597,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
                 key: None,
                 value: Some(b"0".to_vec()),
                 items: None,
-                value_type: ValueType::Bool,
+                value_type: JsonType::Bool,
                 value_custom_type: None,
             };
             
@@ -605,7 +609,7 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
                 key: None,
                 value: Some(b"1".to_vec()),
                 items: None,
-                value_type: ValueType::Bool,
+                value_type: JsonType::Bool,
                 value_custom_type: None,
             };
         }
@@ -621,21 +625,9 @@ fn handle_any(json_wrapper: &mut JsonStringWrapper) -> JsonItem {
 }
 
 
-
-#[pyclass]
-struct ValueEnvelope{
-    #[pyo3(get, set)]
-    value: String,
-    #[pyo3(get, set)]
-    class: String
-}
-
-
-
-
 /// Formats the sum of two numbers as string.
 #[pyfunction]
-fn load_file(file_path: String) -> PyResult<JsonWrapper> {
+fn load_file(file_path: String) -> JsonWrapper {
 
     //let contents = fs::read(file_path)
     //.expect("Should have been able to read the file");
@@ -653,12 +645,12 @@ fn load_file(file_path: String) -> PyResult<JsonWrapper> {
     let top_level_item = handle_dict_or_list(&mut json_wrapper);
     
     match top_level_item.value_type {
-        ValueType::Dict | ValueType::List => {
+        JsonType::Dict | JsonType::List => {
             info!("Returning {} with {} items", top_level_item.value_type, top_level_item.items.as_ref().unwrap().len());
-            return Ok(JsonWrapper {
+            return JsonWrapper {
                 top_level_type: top_level_item.value_type,
                 children: top_level_item.items,
-            });
+            };
         },
         __cause__ => {
             panic!("Expected a dict or list but instead found \"{}\" at index {}", json_wrapper.current().unwrap() as char, json_wrapper.index);
@@ -698,6 +690,9 @@ fn magicjson_rust(_py: Python, m: &PyModule) -> PyResult<()> {
     .init();
 
     //pyo3_log::init();
+    m.add_class::<JsonWrapper>()?;
+    m.add_class::<JsonItem>()?;
+    m.add_class::<JsonType>()?;
 
     m.add_function(wrap_pyfunction!(load_file, m)?)?;
     m.add_function(wrap_pyfunction!(loads, m)?)?;

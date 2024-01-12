@@ -16,7 +16,7 @@ BOOL_ID = 5
 NULL_ID = 6
 CUSTOM_TYPE_ID = 7
 
-parse_rust_input(x[0])
+#parse_rust_input(x[0])
 
 y = parse_rust_input(
     input = JsonWrapper(
