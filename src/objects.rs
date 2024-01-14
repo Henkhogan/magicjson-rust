@@ -1,4 +1,5 @@
 use pyo3::prelude::*;
+use pyo3::types::{PyBool, PyDict, PyInt, PyList, PyFloat, PyString, PyTuple, PyCode, PyAny};
 use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
@@ -43,26 +44,77 @@ impl fmt::Display for JsonType {
     }
 }
 
+pub type JsonKey = String;
 
+//#[pyclass(module="magicjson")]
+#[derive(Clone, Debug)]
+//#[derive(Clone, Debug)]
+pub enum JsonItem {
+    Bool(JsonType, bool),
+    Dict(JsonType, HashMap<JsonKey, JsonItem>),
+    Int(JsonType, i32),
+    List(JsonType, Vec<JsonItem>),
+    Float(JsonType, f64),
+    Null(JsonType), 
+    Str(JsonType, String),
+    Custom(JsonType, String, String),
+    
+}
 
+//#[pymethods]
+impl IntoPy<Py<PyAny>> for JsonItem {
+    fn into_py(self, py: Python<'_>) -> Py<PyAny> {
+        match self {
+            JsonItem::Bool(_json_type, _value) => {
+                return PyBool::new(py, _value).into();
+            },
+            JsonItem::Dict(_json_type, _value) => {
+                return _value.into_py(py);
+            },
+            JsonItem::Int(_json_type, _value) => {
+                return _value.into_py(py);
+            },
+            JsonItem::List(_json_type, _value) => {
+                return PyList::new(py, _value.into_iter().map(|i|i.into_py(py))).into();
+            },
+            JsonItem::Float(_json_type, _value) => {
+                return PyFloat::new(py, _value).into();
+            },
+            JsonItem::Null(_json_type) => {
+                return ().into_py(py);
+            },
+            JsonItem::Str(_json_type, _value) => {
+                return PyString::new(py, &_value).into();
+            },
+            JsonItem::Custom(_json_type, _custom_type, _value) => {
+                return PyTuple::new(py, vec!(&_custom_type,& _value)).into();
+            },
+        }
+
+    }
+}
 #[pyclass(module="magicjson", get_all)]
 #[derive(Clone, Debug)]
-pub struct JsonItem {
+pub struct JsonItemOld {
     pub key: Option<String>,
     // value should be converted to bytearray but is currently a list of bytes
     pub value_bool: Option<bool>,
-    pub value_dict: Option<HashMap<String, JsonItem>>,
+    pub value_dict: Option<HashMap<String, JsonItemOld>>,
     pub value_int: Option<i8>,
-    pub value_list: Option<Vec<JsonItem>>,
+    pub value_list: Option<Vec<JsonItemOld>>,
     pub value_float: Option<f32>,
     pub value_str: Option<String>,
-    pub items: Option<Vec<JsonItem>>,
+    pub items: Option<Vec<JsonItemOld>>,
     pub value_type: JsonType,
-    pub value_custom_type: Option<String>,
+    pub value_custom_type: Option<String>
+}
+
+trait JsonItemTrait {
+    fn __hash__(&self) -> u64;
 }
 
 #[pymethods]
-impl JsonItem {
+impl JsonItemOld {
 
     
 }

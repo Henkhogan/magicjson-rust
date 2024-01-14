@@ -11,7 +11,7 @@ mod wrapper;
 use wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
 mod objects;
-use objects::{JsonItem, JsonType};
+use objects::{JsonItemOld, JsonType, JsonItem, JsonKey};
 
 mod handler;
 use handler::handle_dict_or_list;
@@ -45,17 +45,9 @@ fn load_file(file_path: String) -> JsonItem {
     // Skip forward the first non-whitespace character
     json_wrapper.skip_whitespace();
     
-    let top_level_item = handle_dict_or_list(&mut json_wrapper, None);
+    return handle_dict_or_list(&mut json_wrapper);
     
-    match top_level_item.value_type {
-        JsonType::Dict | JsonType::List => {
-            info!("Returning {} with {} items", top_level_item.value_type, top_level_item.items.as_ref().unwrap().len());
-            return top_level_item
-        },
-        __cause__ => {
-            panic!("Expected a dict or list but instead found \"{}\" at index {}", json_wrapper.current as char, json_wrapper.index);
-        }
-    }
+    
 }
 
 #[pyfunction]
@@ -93,7 +85,7 @@ fn magicjson(_py: Python, m: &PyModule) -> PyResult<()> {
 
 
     //pyo3_log::init();
-    m.add_class::<JsonItem>()?;
+    m.add_class::<JsonItemOld>()?;
     m.add_class::<JsonType>()?;
 
     m.add_function(wrap_pyfunction!(load_file, m)?)?;

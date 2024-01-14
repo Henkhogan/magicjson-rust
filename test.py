@@ -3,13 +3,14 @@ import timeit
 import json
 
 #logging.basicConfig(level=logging.DEBUG)
-from magicjson import JsonItem, JsonType, parse_rust_input, load_file
+from magicjson import JsonType, load_file #parse_rust_input
 
 x = load_file("tests/test1.json")
 #logging.getLogger().setLevel(logging.ERROR)
+y = None
 
 def load_file_rust():
-    parse_rust_input(load_file("tests/test0.json"))
+    load_file("tests/test0.json")
 
 def load_file_builtin():
     with open("tests/test0.json", "r") as f:
@@ -147,9 +148,9 @@ y = parse_rust_input(
         ),
     )
 )
-"""
 
 print(parse_rust_input(x))
+"""
 
 print(timeit.timeit(load_file_rust,    number=1000))
 print(timeit.timeit(load_file_builtin, number=1000))

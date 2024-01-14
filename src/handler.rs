@@ -1,16 +1,18 @@
+use std::collections::HashMap;
+
 use log::{debug, info};
 
 
 
 use crate::constants::{DIGIT_CHARS, WHITESPACE_CHARS, QUOTE_CHARS, DICT_START_CHAR, DICT_END_CHAR, LIST_START_CHAR, LIST_END_CHAR, COMMA_CHAR, DOT_CHAR, MINUS_CHAR, PLUS_CHAR, ESCAPE_CHAR, AFTER_NULL_CHARS, LOOP_MAX_ITERATIONS, MAX_ITEMS, NUMERIC_CHARS};
 
-use crate::objects::{JsonItem, JsonType};
+use crate::objects::{JsonType, JsonItem, JsonKey};
 
 use crate::wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
 
 
-pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
+pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 
     debug!("Found a dict");
     json_wrapper.skip_whitespace();
@@ -20,7 +22,7 @@ pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> 
     json_wrapper.skip_colon();
     json_wrapper.skip_whitespace();
 
-    let mut values: Vec<JsonItem> = Vec::new();
+    let mut values: HashMap<JsonKey, JsonItem> = HashMap::new();
 
     let mut c: u8;
     let mut _lix: u16 = 0;
@@ -66,24 +68,15 @@ pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> 
         }
       
         json_wrapper.skip_whitespace();
-        values.push(handle_any(json_wrapper, Some(ikey.clone())));  
+        values.insert(ikey.clone(), handle_any(json_wrapper, Some(ikey.clone()))); 
+        debug!("Inserted key \"{}\" at index {}", ikey, json_wrapper.index);
+        //values.push(handle_any(json_wrapper, Some(ikey.clone())));  
     }
     
-    return JsonItem {
-        key,
-        value_bool: None,
-        value_dict: None, //ToDo make use if it here
-        value_float: None,
-        value_int: None,
-        value_list: None,
-        value_str: None,
-        items: Some(values),
-        value_type: JsonType::Dict,
-        value_custom_type: None,
-    }
+    return JsonItem::Dict(JsonType::Dict, values);  
 }
 
-pub fn handle_list(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
+pub fn handle_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
     log::info!("Processing a list");
     json_wrapper.skip_whitespace();
 
@@ -119,29 +112,18 @@ pub fn handle_list(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> 
         values.push(handle_any(json_wrapper, None));
     }
 
-    return JsonItem {
-        key: key,
-        value_bool: None,
-        value_dict: None,
-        value_float: None,
-        value_int: None,
-        value_list: None,
-        value_str: None,
-        items: Some(values),
-        value_type: JsonType::List,
-        value_custom_type: None,
-    }
+    return JsonItem::List(JsonType::List, values);
 }
 
 
-pub fn handle_dict_or_list(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
+pub fn handle_dict_or_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
     match json_wrapper.current {
         DICT_START_CHAR => {
-            return handle_dict(json_wrapper, key);
+            return handle_dict(json_wrapper);
         },
         LIST_START_CHAR => {
             json_wrapper.next();
-            return handle_list(json_wrapper, key);
+            return handle_list(json_wrapper);
         },
         _ => {
             panic!("Expected a dict or list but instead found \"{}\"({}) at index {}", json_wrapper.current as char, json_wrapper.current, json_wrapper.index);
@@ -185,7 +167,7 @@ fn handle_string(json_wrapper: &mut JsonBytesWrapper, quote_char: u8) -> String 
     return value_str;
 }
 
-fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> (JsonType, Vec<u8>) {
+fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
     log::debug!("Handling a number at index {}", json_wrapper.index);
     let mut value: Vec<u8> = Vec::new();
     let mut is_float: bool = false;
@@ -231,12 +213,12 @@ fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> (JsonType, Vec<u8>) {
         json_wrapper.next();
     }
 
-
-    log::info!("Extracted number: \"{}\". Float: {}. Current index: {}", std::str::from_utf8(&value).unwrap(), is_float, json_wrapper.index);
+    let value_str = std::str::from_utf8(&value).unwrap();
+    log::info!("Extracted number: \"{}\". Float: {}. Current index: {}", value_str, is_float, json_wrapper.index);
     if is_float {
-        return (JsonType::Float, value);
+        return JsonItem::Float(JsonType::Float, value_str.parse().unwrap());    
     }
-    return (JsonType::Int, value);
+    return JsonItem::Int(JsonType::Int, value_str.parse().unwrap());
 
 }
 
@@ -263,18 +245,7 @@ fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) 
         type_id.push(c);
         c = json_wrapper.next().unwrap();
     }
-    //for c in json_wrapper.slice() {
-    //    if WHITESPACE_CHARS.contains(&c) {
-    //        panic!("Expected a custom type but instead found whitespace {} at index {}", c, json_wrapper.index);
-    //    }
-    //    if QUOTE_CHARS.contains(&c) {
-    //        quote_char = *c;
-    //        break;
-    //    }
-    //    type_id.push(*c);
-    //}
 
-    //json_wrapper.index += type_id.len();
 
     let type_id_str = String::from_utf8(type_id).unwrap();
 
@@ -282,18 +253,8 @@ fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) 
     let value = handle_string(json_wrapper, quote_char);
     
     log::info!("Found custom type type \"{}\" with value \"{}\" ", type_id_str, value);
-    return JsonItem {
-        key: key,
-        value_bool: None,
-        value_dict: None,
-        value_float:None,
-        value_int: None,
-        value_list: None,
-        value_str: Some(value),
-        items: None,
-        value_type: JsonType::CustomType,
-        value_custom_type: Some(type_id_str),
-    };
+
+    return JsonItem::Custom(JsonType::CustomType, type_id_str, value);
 }
 
 fn handle_null(json_wrapper: &mut JsonBytesWrapper) {
@@ -345,90 +306,33 @@ fn handle_any(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonI
         // " | '
         0x0022 | 0x0027  => {
             json_wrapper.next(); // Skipping the quote char
-            return JsonItem {
-                key: key,
-                value_bool: None,
-                value_dict: None,
-                value_float: None,
-                value_int: None,
-                value_list: None,
-                value_str: Some(handle_string(json_wrapper, c)),
-                items: None,
-                value_type: JsonType::String,
-                value_custom_type: None,
-            }
+            return JsonItem::Str(JsonType::String, handle_string(json_wrapper, c));
         },
         // Numbers - ToDo: Use arrays
         _ if DIGIT_CHARS.contains(&c) || [DOT_CHAR | MINUS_CHAR | PLUS_CHAR].contains(&c) => {
-            let x = handle_number(json_wrapper);
-            return JsonItem {
-                key: key,
-                value_bool: None,
-                value_float: None,
-                value_dict: None,
-                value_int: None,
-                value_list: None,
-                value_str: None,
-                items: None,
-                value_type: x.0,
-                value_custom_type: None,
-            };
+            return handle_number(json_wrapper);
         },
         // Null
         0x6e => {
             handle_null(json_wrapper);
-            return JsonItem {
-                key: key,
-                value_bool: None,
-                value_float: None,
-                value_dict: None,
-                value_int: None,
-                value_list: None,
-                value_str: None,
-                items: None,
-                value_type: JsonType::Null,
-                value_custom_type: None,
-            };
+            return JsonItem::Null(JsonType::Null);
         },
         // Bool: false
         0x66 => {
             handle_bool(json_wrapper, false);
-            return JsonItem {
-                key: key,
-                value_bool: Some(false),
-                value_dict: None,
-                value_float: None,
-                value_int: None,
-                value_list: None,
-                value_str: None,
-                items: None,
-                value_type: JsonType::Bool,
-                value_custom_type: None,
-            };
-            
+            return JsonItem::Bool(JsonType::Bool, false);
         }
         // Bool: true
         0x74 => {
             handle_bool(json_wrapper, true);
-            return JsonItem {
-                key: key,
-                value_bool: Some(true),
-                value_dict: None,
-                value_float: None,
-                value_int: None,
-                value_list: None,
-                value_str: None,
-                items: None,
-                value_type: JsonType::Bool,
-                value_custom_type: None,
-            };
+            return JsonItem::Bool(JsonType::Bool, true);
         }
         // Custom
         0x40 => {
             return handle_custom_type(json_wrapper, key);            
         },
         _ => {
-            handle_dict_or_list(json_wrapper, key)
+            return handle_dict_or_list(json_wrapper)
         }
     }
 

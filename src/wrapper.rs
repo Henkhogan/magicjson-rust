@@ -4,6 +4,8 @@ use std::{io::BufReader, str::Bytes, fs::File};
 
 use log::{debug, error, info};
 
+use crate::JsonKey;
+
 pub struct JsonBytesWrapper {
     pub bufreader: std::io::Bytes<BufReader<File>>,
     pub index: usize,
@@ -54,7 +56,7 @@ impl JsonWrapperTrait for JsonBytesWrapper{
         debug!("(Skip colon) Shifted index to {}", self.index);
     }
 
-    fn find_key(&mut self) -> String {
+    fn find_key(&mut self) -> JsonKey {
 
         debug!("Searching key starting at index {}", self.index);
 
@@ -78,7 +80,7 @@ impl JsonWrapperTrait for JsonBytesWrapper{
 
         }
  
-        let mut key:String = String::new();
+        let mut key:JsonKey = JsonKey::new();
 
         _lix = 0;
         loop {
