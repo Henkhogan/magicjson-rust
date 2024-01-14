@@ -6,22 +6,22 @@ def parse_null(input: JsonItem):
     return None
 
 def parse_rust_list(input: JsonItem):
-    return [parse_rust_item(item) for item in input.items]
+    return tuple([parse_rust_item(item) for item in input.items])
  
 def parse_rust_dict(input: JsonItem):
     return {item.key: parse_rust_item(item, mandatory_key=True) for item in input.items}
 
 def parse_rust_string(input: JsonItem):
-    return bytes(input.value).decode("utf-8")
+    return input.value_str
 
 def parse_rust_int(input: JsonItem):
-    return int(bytes(input.value))
+    return input.value_int
 
 def parse_rust_float(input: JsonItem):
-    return float(bytes(input.value))
+    return input.value_float
 
 def parse_rust_bool(input: JsonItem):
-    return input.value == "true"
+    return input.value_bool
 
 def parse_rust_custom_type(input: JsonItem):
     return input.value_custom_type

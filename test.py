@@ -3,10 +3,10 @@ import timeit
 import json
 
 #logging.basicConfig(level=logging.DEBUG)
-logging.basicConfig(level=logging.ERROR)
 from magicjson import JsonItem, JsonType, parse_rust_input, load_file
 
 x = load_file("tests/test1.json")
+#logging.getLogger().setLevel(logging.ERROR)
 
 def load_file_rust():
     parse_rust_input(load_file("tests/test0.json"))
@@ -151,5 +151,7 @@ y = parse_rust_input(
 
 print(parse_rust_input(x))
 
-print(timeit.timeit(load_file_rust, number=1000))
+print(timeit.timeit(load_file_rust,    number=1000))
 print(timeit.timeit(load_file_builtin, number=1000))
+
+assert(load_file_rust() == load_file_builtin())

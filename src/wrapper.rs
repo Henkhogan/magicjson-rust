@@ -1,17 +1,17 @@
-#[path = "./constants.rs"] mod constants;
-use constants::*;
-use log::debug;
+use crate::constants::{COLON_CHAR, ESCAPE_CHAR, QUOTE_CHARS, WHITESPACE_CHARS, LOOP_MAX_ITERATIONS};
+
+use std::{io::BufReader, str::Bytes, fs::File};
+
+use log::{debug, error, info};
 
 pub struct JsonBytesWrapper {
-    pub content: Vec<u8>,
+    pub bufreader: std::io::Bytes<BufReader<File>>,
     pub index: usize,
-    //items: Vec<_JsonItem>,
+    pub current: u8,
+    pub end_reached: bool,
 }
 
 pub trait JsonWrapperTrait {
-    fn end_reached(&self) -> bool;
-    fn slice(&self) -> &[u8];
-    fn current(&self) -> Option<u8>;
     fn skip_whitespace(&mut self);
     fn skip_colon(&mut self);
     fn find_key(&mut self) -> String;
@@ -19,38 +19,38 @@ pub trait JsonWrapperTrait {
 
 impl JsonWrapperTrait for JsonBytesWrapper{
 
-
-    fn end_reached(&self) -> bool {
-        return self.index+1 >= self.content.len();
-    }
-    fn slice(&self) -> &[u8] {
-        return &self.content[self.index..];
-    }
-
-    fn current(&self) -> Option<u8> {
-        return Some(self.content[self.index]);
-    }
-
     fn skip_whitespace(&mut self) {
 
         let start_index = self.index;
-        debug!("Entering skip_whitespace at index {} with char: {}", start_index, self.current().unwrap() as char);
+        debug!("Entering skip_whitespace at index {} with char: {}", start_index, self.current as char);
 
-        while WHITESPACE_CHARS.contains(&self.current().unwrap()) {
-            self.next().unwrap();
-        }
+        let mut _lix = 0;
+        loop {
+            _lix += 1;
+            if _lix >= LOOP_MAX_ITERATIONS {
+                panic!("Reached max iterations while skipping whitespace");
+            }
+            if self.end_reached {
+                break;
+            }
+            if !WHITESPACE_CHARS.contains(&self.current) {
+                break;
+            }
+            self.next();
+        }   
+  
         
         if self.index > start_index {
-            debug!("(Skip Whitespace) Shifted index from {} to {} at char \"{}\"({})", start_index, self.index, self.current().unwrap() as char, self.current().unwrap());
+            debug!("(Skip Whitespace) Shifted index from {} to {} at char \"{}\"({})", start_index, self.index, self.current as char, self.current);
         }
     }
 
     fn skip_colon(&mut self) {
-        if self.current().unwrap() != COLON_CHAR {
-            panic!("Expected a colon but instead found \"{}\"({}) at index {}", self.current().unwrap() as char, self.current().unwrap(), self.index);
+        if self.current != COLON_CHAR {
+            panic!("Expected a colon but instead found \"{}\"({}) at index {}", self.current as char, self.current, self.index);
         }
         debug!("Found a colon at index {}", self.index);
-        self.index += 1;
+        self.next();
         debug!("(Skip colon) Shifted index to {}", self.index);
     }
 
@@ -58,59 +58,80 @@ impl JsonWrapperTrait for JsonBytesWrapper{
 
         debug!("Searching key starting at index {}", self.index);
 
-        let mut quote_char: u8 = 0x00;
-        let mut index: usize = self.index;
-        for c in self.slice() { 
-            index += 1;
-            if QUOTE_CHARS.contains(&c) {
-                quote_char = *c;
-                break;
-            }
-        }
-        self.index = index;
-    
-    
-        let mut key:Vec<u8>  = Vec::new();
-        let mut escaped: bool = false;
-    
-        for c in self.slice() {
-            index += 1;
-            // If already escaped we just push the char and reset the flag
-            if escaped {
-                key.push(*c);
-                escaped = false;
-                continue;
-            }
-            // If we find the escape char we set the flag and continue
-            if *c == 0x005C {
-                key.push(*c);
-                escaped = true;
-                continue;
-            }
-            // If we find the quote char we reached the end of the key
-            if *c == quote_char {
-                break;
-            }
-            key.push(*c);
-            continue;
-        }
-        self.index = index;
+        let quote_char: u8;
 
-  
-    
-        return String::from_utf8(key).unwrap();
+        let mut c: u8 = self.current;
+
+        let mut _lix: u16 = 0;
+        loop {
+            debug!("Checking char: {} at index {}", c as char, self.index);
+            _lix += 1;
+            if _lix >= LOOP_MAX_ITERATIONS {
+                panic!("Reached max iterations while searching for quote char");
+            }
+            if QUOTE_CHARS.contains(&c) {
+                quote_char = c.clone();
+                debug!("Detected quote char: {} at index {}", c as char, self.index);
+                break;
+            }
+            c = self.next().unwrap();
+
+        }
+ 
+        let mut key:String = String::new();
+
+        _lix = 0;
+        loop {
+            _lix += 1;
+            if _lix >= LOOP_MAX_ITERATIONS {
+                panic!("Reached max iterations while searching for quote char");
+            }
+            c = self.next().unwrap();
+
+            match c {
+                // If we find the escape char we read the next 2 bytes and shift the index by 1
+                ESCAPE_CHAR => {
+                    debug!("Found escape char at index {}", self.index);
+                    key.push(c as char);
+                    key.push(self.next().unwrap() as char);
+                    self.next();
+                    continue;
+                },
+                // If we find the quote char we reached the end of the key
+                c if c == quote_char => {
+                    debug!("Found end of key {} at index {}", c as char, self.index);
+                    self.next();
+                    break;
+                },
+                _ => {
+                    key.push(c as char);
+                    continue;
+                }  
+            }
+        }
+        return key
     }
 }
 
-
- 
 
 impl Iterator for JsonBytesWrapper {
     type Item = u8;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let c = self.content[self.index];
         self.index += 1;
-        return Some(c);
+        match self.bufreader.next() {
+            Some(Ok(c)) => {
+                self.current = c;
+                return Some(c);
+            },
+            Some(Err(e)) => {
+                panic!("Error while reading file: {}", e);
+            },
+            None => {
+                info!("(Next) Reached end of file at index {}", self.index);
+                self.end_reached = true;
+                return None;
+            }
+        }
     }
 }
