@@ -4,9 +4,9 @@ use log::{debug, info};
 
 
 
-use crate::constants::{DIGIT_CHARS, WHITESPACE_CHARS, QUOTE_CHARS, DICT_START_CHAR, DICT_END_CHAR, LIST_START_CHAR, LIST_END_CHAR, COMMA_CHAR, DOT_CHAR, MINUS_CHAR, PLUS_CHAR, ESCAPE_CHAR, AFTER_NULL_CHARS, LOOP_MAX_ITERATIONS, MAX_ITEMS, NUMERIC_CHARS};
+use crate::constants::{DIGIT_CHARS, WHITESPACE_CHARS, QUOTE_CHARS, DICT_START_CHAR, DICT_END_CHAR, LIST_START_CHAR, LIST_END_CHAR, COMMA_CHAR, DOT_CHAR, MINUS_CHAR, PLUS_CHAR, ESCAPE_CHAR, AFTER_NULL_CHARS, LOOP_MAX_ITERATIONS, MAX_ITEMS, NUMERIC_CHARS, DATETIME_ID, TIMESTAMP_ID};
 
-use crate::objects::{JsonType, JsonItem, JsonKey, JsonCustomType};
+use crate::objects::{JsonItem, JsonKey, JsonCustomType};
 
 use crate::wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
@@ -173,11 +173,9 @@ fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
     let mut is_float: bool = false;
     let mut is_signed: bool = false;
     
-    //let mut c = json_wrapper.current;
-    let mut c: u8 = json_wrapper.current;
 
-    if !NUMERIC_CHARS.contains(&c) || c == MINUS_CHAR | PLUS_CHAR {
-        panic!("Expected a number but instead found \"{}\"({}) at index {}", c as char, c, json_wrapper.index);
+    if !NUMERIC_CHARS.contains(&json_wrapper.current) || json_wrapper.current == MINUS_CHAR | PLUS_CHAR {
+        panic!("Expected a number but instead found \"{}\" at index {}", json_wrapper.current as char, json_wrapper.index);
     }
 
     let mut _lix: u16 = 0;
@@ -189,27 +187,26 @@ fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
             panic!("Reached max iterations {} at index {}", LOOP_MAX_ITERATIONS, json_wrapper.index);
         }
 
-        c = json_wrapper.current;
-
-        if c == DOT_CHAR {
-            if is_float {
-                panic!("(Number) Found repeated dot at index {}", json_wrapper.index);
-            }
-            is_float = true;
-        }
-
-        if c == MINUS_CHAR | PLUS_CHAR {
-            if is_signed {
-                panic!("(Number) Found repeated sign \"{}\" at index {}", c as char, json_wrapper.index);
-            }
-            is_signed = true;
-        }
-
-        if !NUMERIC_CHARS.contains(&c) {
-            break;
+        match json_wrapper.current {
+            DOT_CHAR  => {
+                if is_float {
+                    panic!("(Number) Found repeated dot at index {}", json_wrapper.index);
+                }
+                is_float = true;
+            },
+            MINUS_CHAR | PLUS_CHAR => {
+                if is_signed {
+                    panic!("(Number) Found repeated sign \"{}\" at index {}", json_wrapper.current as char, json_wrapper.index);
+                }
+                is_signed = true;
+            },
+            _ if !NUMERIC_CHARS.contains(&json_wrapper.current) => {
+                break;
+            },
+            _ => {}
         }
         
-        value.push(c);
+        value.push(json_wrapper.current);
         json_wrapper.next();
     }
 
@@ -254,7 +251,19 @@ fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) 
     
     log::info!("Found custom type type \"{}\" with value \"{}\" ", type_id_str, value);
 
-    return JsonItem::Custom(JsonCustomType{name: type_id_str, value: value});
+    match type_id_str.as_str() {
+        DATETIME_ID => {
+            return JsonItem::Datetime(value.parse().unwrap());
+        },
+        TIMESTAMP_ID => {
+            return JsonItem::Timestamp(value.parse().unwrap());
+        },
+        _ => {
+            return JsonItem::Custom(JsonCustomType{name: type_id_str, value: value});
+        }
+        
+    }
+
 }
 
 fn handle_null(json_wrapper: &mut JsonBytesWrapper) {

@@ -1,48 +1,7 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyInt, PyList, PyFloat, PyString, PyTuple, PyCode, PyAny};
+use pyo3::types::{PyBool, PyDateTime, PyDict, PyInt, PyList, PyFloat, PyString, PyTuple, PyCode, PyAny, PyTzInfo};
 use std::collections::HashMap;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::Hasher;
-use std::{fmt, hash::Hash};
-
-
-
-#[pyclass(module="magicjson")]
-#[derive(Clone, Copy, Debug, Hash)]
-pub enum JsonType {
-    Null,
-    List,
-    Dict,
-    String,
-    Int,
-    Float,
-    Bool,
-    CustomType,
-}
-
-#[pymethods]
-impl JsonType {
-    fn __hash__(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        self.hash(&mut hasher);
-        hasher.finish()
-    }
-}
-
-impl fmt::Display for JsonType {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {            
-            JsonType::Null => write!(f, "Null"),
-            JsonType::List => write!(f, "List"),
-            JsonType::Dict => write!(f, "Dict"),
-            JsonType::String => write!(f, "String"),
-            JsonType::Int => write!(f, "Int"),
-            JsonType::Float => write!(f, "Float"),
-            JsonType::Bool => write!(f, "Bool"),
-            JsonType::CustomType => write!(f, "CustomType"),
-        }
-    }
-}
+use iso8601::{Date, DateTime as IsoDateTime};
 
 pub type JsonKey = String;
 
@@ -70,6 +29,8 @@ pub enum JsonItem {
     Null(), 
     Str(String),
     Custom(JsonCustomType),
+    Datetime(IsoDateTime),
+    Timestamp(f64),
     
 }
 
@@ -87,7 +48,7 @@ impl IntoPy<Py<PyAny>> for JsonItem {
                 return _value.into_py(py);
             },
             JsonItem::List(_value) => {
-                return PyList::new(py, _value.into_iter().map(|i|i.into_py(py))).into();
+                return PyTuple::new(py, _value.into_iter().map(|i|i.into_py(py))).into();
             },
             JsonItem::Float(_value) => {
                 return PyFloat::new(py, _value).into();
@@ -97,6 +58,23 @@ impl IntoPy<Py<PyAny>> for JsonItem {
             },
             JsonItem::Str(_value) => {
                 return PyString::new(py, &_value).into();
+            },
+            JsonItem::Datetime(_value) => {
+                match _value.date {
+                    Date::YMD { year, month, day } => {
+                        return PyDateTime::new(
+                            py,
+                            year, month as u8, day as u8, 
+                            _value.time.hour as u8, _value.time.minute as u8, _value.time.second as u8, _value.time.millisecond*1000, None // ToDo: handle TZ PyTzInfo::from(py, _value.time.tz_offset_hours*60*60+_value.time.tz_offset_minutes*60, false, None)
+                        ).unwrap().into();
+                    },
+                    _ => {
+                        panic!("Unsupported date format");
+                    }
+                }
+            },
+            JsonItem::Timestamp(_value) => {
+                return PyDateTime::from_timestamp(py, _value, None).unwrap().into();
             },
             JsonItem::Custom(_value) => {
                 return _value.into_py(py);

@@ -1,3 +1,3 @@
 source .pyenv/bin/activate
-maturin develop
+maturin develop -r
 python3 -m test.py

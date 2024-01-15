@@ -4,7 +4,7 @@
         "str1key": "str1value",
         "int1key": 0,
         "children": ["l1", "l2", "l3", "l4", "l5", "l6", "l7", "l8"],
-        "timestamp": @dt"2019-01-01 00:00:00",
+        "timestamp": @dt"2019-01-01T00:00:00",
         "l1": {
             "null1": null,
             "bool1": false,

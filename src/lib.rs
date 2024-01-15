@@ -11,12 +11,15 @@ mod wrapper;
 use wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
 mod objects;
-use objects::{JsonItemOld, JsonType, JsonItem, JsonKey, JsonCustomType};
+use objects::{JsonItem, JsonKey, JsonCustomType};
 
 mod handler;
 use handler::handle_dict_or_list;
 
 mod constants;
+
+#[macro_use]
+extern crate lazy_static;
 
 
 
@@ -71,11 +74,6 @@ fn magicjson(_py: Python, m: &PyModule) -> PyResult<()> {
     //.init();
 
     pyo3_log::init();
-
-
-    //pyo3_log::init();
-    m.add_class::<JsonItemOld>()?;
-    m.add_class::<JsonType>()?;
 
     m.add_function(wrap_pyfunction!(load_file, m)?)?;
     m.add_function(wrap_pyfunction!(loads, m)?)?;
