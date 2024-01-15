@@ -46,18 +46,30 @@ impl fmt::Display for JsonType {
 
 pub type JsonKey = String;
 
+#[derive(Clone, Debug)]
+pub struct JsonCustomType {
+    pub name: String,
+    pub value: String,
+}
+
+impl IntoPy<Py<PyAny>> for JsonCustomType {
+    fn into_py(self, py: Python<'_>) -> Py<PyAny> {
+        return PyTuple::new(py, vec!(self.name,self.value)).into();
+    }
+}
+
 //#[pyclass(module="magicjson")]
 #[derive(Clone, Debug)]
 //#[derive(Clone, Debug)]
 pub enum JsonItem {
-    Bool(JsonType, bool),
-    Dict(JsonType, HashMap<JsonKey, JsonItem>),
-    Int(JsonType, i32),
-    List(JsonType, Vec<JsonItem>),
-    Float(JsonType, f64),
-    Null(JsonType), 
-    Str(JsonType, String),
-    Custom(JsonType, String, String),
+    Bool(bool),
+    Dict(HashMap<JsonKey, JsonItem>),
+    Int(i32),
+    List(Vec<JsonItem>),
+    Float(f64),
+    Null(), 
+    Str(String),
+    Custom(JsonCustomType),
     
 }
 
@@ -65,71 +77,31 @@ pub enum JsonItem {
 impl IntoPy<Py<PyAny>> for JsonItem {
     fn into_py(self, py: Python<'_>) -> Py<PyAny> {
         match self {
-            JsonItem::Bool(_json_type, _value) => {
+            JsonItem::Bool(_value) => {
                 return PyBool::new(py, _value).into();
             },
-            JsonItem::Dict(_json_type, _value) => {
+            JsonItem::Dict(_value) => {
                 return _value.into_py(py);
             },
-            JsonItem::Int(_json_type, _value) => {
+            JsonItem::Int(_value) => {
                 return _value.into_py(py);
             },
-            JsonItem::List(_json_type, _value) => {
+            JsonItem::List(_value) => {
                 return PyList::new(py, _value.into_iter().map(|i|i.into_py(py))).into();
             },
-            JsonItem::Float(_json_type, _value) => {
+            JsonItem::Float(_value) => {
                 return PyFloat::new(py, _value).into();
             },
-            JsonItem::Null(_json_type) => {
+            JsonItem::Null() => {
                 return ().into_py(py);
             },
-            JsonItem::Str(_json_type, _value) => {
+            JsonItem::Str(_value) => {
                 return PyString::new(py, &_value).into();
             },
-            JsonItem::Custom(_json_type, _custom_type, _value) => {
-                return PyTuple::new(py, vec!(&_custom_type,& _value)).into();
+            JsonItem::Custom(_value) => {
+                return _value.into_py(py);
             },
         }
 
     }
 }
-#[pyclass(module="magicjson", get_all)]
-#[derive(Clone, Debug)]
-pub struct JsonItemOld {
-    pub key: Option<String>,
-    // value should be converted to bytearray but is currently a list of bytes
-    pub value_bool: Option<bool>,
-    pub value_dict: Option<HashMap<String, JsonItemOld>>,
-    pub value_int: Option<i8>,
-    pub value_list: Option<Vec<JsonItemOld>>,
-    pub value_float: Option<f32>,
-    pub value_str: Option<String>,
-    pub items: Option<Vec<JsonItemOld>>,
-    pub value_type: JsonType,
-    pub value_custom_type: Option<String>
-}
-
-trait JsonItemTrait {
-    fn __hash__(&self) -> u64;
-}
-
-#[pymethods]
-impl JsonItemOld {
-
-    
-}
-
-//impl IntoPy<PyObject> for JsonItem {
-//    fn into_py(self, py: Python<'_>) -> PyObject {
-//        return PyObject {
-//            key: self.key.into_py(py);
-//            let value = self.value.into_py(py);
-//            let items = self.items.into_py(py);
-//            let value_type = self.value_type.into_py(py);
-//            let value_custom_type = self.value_custom_type.into_py(py);
-//
-//        }
-//        //self.top_level_type.into_py(py),
-//        //self.children.unwrap().into_py(py)
-//    }
-//}

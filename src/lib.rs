@@ -11,7 +11,7 @@ mod wrapper;
 use wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
 mod objects;
-use objects::{JsonItemOld, JsonType, JsonItem, JsonKey};
+use objects::{JsonItemOld, JsonType, JsonItem, JsonKey, JsonCustomType};
 
 mod handler;
 use handler::handle_dict_or_list;
@@ -24,30 +24,19 @@ mod constants;
 #[pyfunction]
 fn load_file(file_path: String) -> JsonItem {
 
-    //let contents = fs::read(file_path)
-    //.expect("Should have been able to read the file");
-    //let mut bufreader = contents.bytes();
-
-    let mut bufreader = std::io::BufReader::new(fs::File::open(&file_path).unwrap()).bytes();
-    
+    let mut bufreader = std::io::BufReader::new(fs::File::open(&file_path).unwrap()).bytes();   
     
     let mut json_wrapper = JsonBytesWrapper {
-        // ToDo: Use a better way to read the file in chunks: https://dev.to/oliverjumpertz/how-to-read-files-in-rust-525d?comments_sort=top
-        //content: fs::read(&file_path).unwrap(),
+        // Source: https://dev.to/oliverjumpertz/how-to-read-files-in-rust-525d?comments_sort=top
         current: bufreader.next().unwrap().unwrap(),
         bufreader: bufreader,
         index: 0,
         end_reached: false,
     };
 
-
-
     // Skip forward the first non-whitespace character
-    json_wrapper.skip_whitespace();
-    
+    json_wrapper.skip_whitespace();    
     return handle_dict_or_list(&mut json_wrapper);
-    
-    
 }
 
 #[pyfunction]

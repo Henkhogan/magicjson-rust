@@ -41,7 +41,6 @@ impl JsonWrapperTrait for JsonBytesWrapper{
             self.next();
         }   
   
-        
         if self.index > start_index {
             debug!("(Skip Whitespace) Shifted index from {} to {} at char \"{}\"({})", start_index, self.index, self.current as char, self.current);
         }

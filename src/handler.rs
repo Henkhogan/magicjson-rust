@@ -6,7 +6,7 @@ use log::{debug, info};
 
 use crate::constants::{DIGIT_CHARS, WHITESPACE_CHARS, QUOTE_CHARS, DICT_START_CHAR, DICT_END_CHAR, LIST_START_CHAR, LIST_END_CHAR, COMMA_CHAR, DOT_CHAR, MINUS_CHAR, PLUS_CHAR, ESCAPE_CHAR, AFTER_NULL_CHARS, LOOP_MAX_ITERATIONS, MAX_ITEMS, NUMERIC_CHARS};
 
-use crate::objects::{JsonType, JsonItem, JsonKey};
+use crate::objects::{JsonType, JsonItem, JsonKey, JsonCustomType};
 
 use crate::wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
@@ -73,7 +73,7 @@ pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
         //values.push(handle_any(json_wrapper, Some(ikey.clone())));  
     }
     
-    return JsonItem::Dict(JsonType::Dict, values);  
+    return JsonItem::Dict(values);  
 }
 
 pub fn handle_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
@@ -112,7 +112,7 @@ pub fn handle_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
         values.push(handle_any(json_wrapper, None));
     }
 
-    return JsonItem::List(JsonType::List, values);
+    return JsonItem::List(values);
 }
 
 
@@ -216,9 +216,9 @@ fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
     let value_str = std::str::from_utf8(&value).unwrap();
     log::info!("Extracted number: \"{}\". Float: {}. Current index: {}", value_str, is_float, json_wrapper.index);
     if is_float {
-        return JsonItem::Float(JsonType::Float, value_str.parse().unwrap());    
+        return JsonItem::Float(value_str.parse().unwrap());    
     }
-    return JsonItem::Int(JsonType::Int, value_str.parse().unwrap());
+    return JsonItem::Int(value_str.parse().unwrap());
 
 }
 
@@ -254,7 +254,7 @@ fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) 
     
     log::info!("Found custom type type \"{}\" with value \"{}\" ", type_id_str, value);
 
-    return JsonItem::Custom(JsonType::CustomType, type_id_str, value);
+    return JsonItem::Custom(JsonCustomType{name: type_id_str, value: value});
 }
 
 fn handle_null(json_wrapper: &mut JsonBytesWrapper) {
@@ -306,7 +306,7 @@ fn handle_any(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonI
         // " | '
         0x0022 | 0x0027  => {
             json_wrapper.next(); // Skipping the quote char
-            return JsonItem::Str(JsonType::String, handle_string(json_wrapper, c));
+            return JsonItem::Str(handle_string(json_wrapper, c));
         },
         // Numbers - ToDo: Use arrays
         _ if DIGIT_CHARS.contains(&c) || [DOT_CHAR | MINUS_CHAR | PLUS_CHAR].contains(&c) => {
@@ -315,17 +315,17 @@ fn handle_any(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonI
         // Null
         0x6e => {
             handle_null(json_wrapper);
-            return JsonItem::Null(JsonType::Null);
+            return JsonItem::Null();
         },
         // Bool: false
         0x66 => {
             handle_bool(json_wrapper, false);
-            return JsonItem::Bool(JsonType::Bool, false);
+            return JsonItem::Bool(false);
         }
         // Bool: true
         0x74 => {
             handle_bool(json_wrapper, true);
-            return JsonItem::Bool(JsonType::Bool, true);
+            return JsonItem::Bool(true);
         }
         // Custom
         0x40 => {

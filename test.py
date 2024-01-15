@@ -7,7 +7,6 @@ from magicjson import JsonType, load_file #parse_rust_input
 
 x = load_file("tests/test1.json")
 #logging.getLogger().setLevel(logging.ERROR)
-y = None
 
 def load_file_rust():
     load_file("tests/test0.json")
@@ -15,6 +14,8 @@ def load_file_rust():
 def load_file_builtin():
     with open("tests/test0.json", "r") as f:
         json.load(f)
+
+assert(load_file_rust() == load_file_builtin())
 """
 y = parse_rust_input(
     input = JsonItem(
@@ -155,4 +156,3 @@ print(parse_rust_input(x))
 print(timeit.timeit(load_file_rust,    number=1000))
 print(timeit.timeit(load_file_builtin, number=1000))
 
-assert(load_file_rust() == load_file_builtin())
