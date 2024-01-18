@@ -1,17 +1,12 @@
-use pyo3::{prelude::*, buffer};
-use std::{io::Read, backtrace};
+use pyo3::prelude::*;
+use std::io::Read;
 use std::fs;
-//use std::str::FromStr;
-use log::{debug, info};
-use chrono::Local;
-use env_logger::Builder;
-use log::LevelFilter;
 
 mod wrapper;
 use wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
 mod objects;
-use objects::{JsonItem, JsonKey, JsonCustomType};
+use objects::{JsonItem, JsonKey};
 
 mod handler;
 use handler::handle_dict_or_list;
@@ -41,6 +36,9 @@ fn load_file(file_path: String) -> JsonItem {
     json_wrapper.skip_whitespace();    
     return handle_dict_or_list(&mut json_wrapper);
 }
+
+
+
 
 #[pyfunction]
 fn loads(a: usize, b: usize) -> PyResult<String> {
@@ -74,6 +72,8 @@ fn magicjson(_py: Python, m: &PyModule) -> PyResult<()> {
     //.init();
 
     pyo3_log::init();
+
+
 
     m.add_function(wrap_pyfunction!(load_file, m)?)?;
     m.add_function(wrap_pyfunction!(loads, m)?)?;

@@ -1,9 +1,8 @@
 /target
 /.pyenv/
 
-/magicjson/*.so
 # Byte-compiled / optimized / DLL files
 __pycache__/
 **.py[cod]
 
-magicjson/magicjson.cpython-312-x86_64-linux-gnu.so
+**.so

@@ -1,8 +1,8 @@
 use crate::constants::{COLON_CHAR, ESCAPE_CHAR, QUOTE_CHARS, WHITESPACE_CHARS, LOOP_MAX_ITERATIONS};
 
-use std::{io::BufReader, str::Bytes, fs::File};
+use std::{io::BufReader, fs::File};
 
-use log::{debug, error, info};
+use log::{debug, trace};
 
 use crate::JsonKey;
 
@@ -24,7 +24,7 @@ impl JsonWrapperTrait for JsonBytesWrapper{
     fn skip_whitespace(&mut self) {
 
         let start_index = self.index;
-        debug!("Entering skip_whitespace at index {} with char: {}", start_index, self.current as char);
+        trace!("Entering skip_whitespace at index {} with char: {}", start_index, self.current as char);
 
         let mut _lix = 0;
         loop {
@@ -42,7 +42,7 @@ impl JsonWrapperTrait for JsonBytesWrapper{
         }   
   
         if self.index > start_index {
-            debug!("(Skip Whitespace) Shifted index from {} to {} at char \"{}\"({})", start_index, self.index, self.current as char, self.current);
+            trace!("(Skip Whitespace) Shifted index from {} to {} at char \"{}\"({})", start_index, self.index, self.current as char, self.current);
         }
     }
 
@@ -50,14 +50,14 @@ impl JsonWrapperTrait for JsonBytesWrapper{
         if self.current != COLON_CHAR {
             panic!("Expected a colon but instead found \"{}\"({}) at index {}", self.current as char, self.current, self.index);
         }
-        debug!("Found a colon at index {}", self.index);
+        trace!("Found a colon at index {}", self.index);
         self.next();
-        debug!("(Skip colon) Shifted index to {}", self.index);
+        trace!("(Skip colon) Shifted index to {}", self.index);
     }
 
     fn find_key(&mut self) -> JsonKey {
 
-        debug!("Searching key starting at index {}", self.index);
+        trace!("Searching key starting at index {}", self.index);
 
         let quote_char: u8;
 
@@ -65,14 +65,14 @@ impl JsonWrapperTrait for JsonBytesWrapper{
 
         let mut _lix: u16 = 0;
         loop {
-            debug!("Checking char: {} at index {}", c as char, self.index);
+            trace!("Checking char: {} at index {}", c as char, self.index);
             _lix += 1;
             if _lix >= LOOP_MAX_ITERATIONS {
                 panic!("Reached max iterations while searching for quote char");
             }
             if QUOTE_CHARS.contains(&c) {
                 quote_char = c.clone();
-                debug!("Detected quote char: {} at index {}", c as char, self.index);
+                trace!("Detected quote char: {} at index {}", c as char, self.index);
                 break;
             }
             c = self.next().unwrap();
@@ -92,7 +92,7 @@ impl JsonWrapperTrait for JsonBytesWrapper{
             match c {
                 // If we find the escape char we read the next 2 bytes and shift the index by 1
                 ESCAPE_CHAR => {
-                    debug!("Found escape char at index {}", self.index);
+                    trace!("Found escape char at index {}", self.index);
                     key.push(c as char);
                     key.push(self.next().unwrap() as char);
                     self.next();
@@ -100,7 +100,7 @@ impl JsonWrapperTrait for JsonBytesWrapper{
                 },
                 // If we find the quote char we reached the end of the key
                 c if c == quote_char => {
-                    debug!("Found end of key {} at index {}", c as char, self.index);
+                    trace!("Found end of key {} at index {}", c as char, self.index);
                     self.next();
                     break;
                 },
@@ -129,7 +129,7 @@ impl Iterator for JsonBytesWrapper {
                 panic!("Error while reading file: {}", e);
             },
             None => {
-                info!("(Next) Reached end of file at index {}", self.index);
+                debug!("(Next) Reached end of file at index {}", self.index);
                 self.end_reached = true;
                 return None;
             }

@@ -1,5 +1,5 @@
 
-use std::{collections::{BTreeSet}, hash::Hash};
+use std::collections::BTreeSet;
 
 lazy_static! {
     pub static ref QUOTE_CHARS: BTreeSet<u8> = {

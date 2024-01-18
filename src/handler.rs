@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use log::{debug, info};
+use log::{debug, trace};
 
 
 
@@ -10,14 +10,15 @@ use crate::objects::{JsonItem, JsonKey, JsonCustomType};
 
 use crate::wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
-
+//use iso8601::{DateTime as IsoDateTime};
+use chrono::DateTime;
 
 pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 
-    debug!("Found a dict");
+    trace!("Found a dict");
     json_wrapper.skip_whitespace();
     let mut ikey = json_wrapper.find_key();
-    info!("Found key: {:?}", ikey);
+    debug!("Found key: {:?}", ikey);
     json_wrapper.skip_whitespace();
     json_wrapper.skip_colon();
     json_wrapper.skip_whitespace();
@@ -41,12 +42,12 @@ pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
         
         match c {
             DICT_END_CHAR => {
-                log::info!("Found dict end at index {}", json_wrapper.index);
+                log::debug!("Found dict end at index {}", json_wrapper.index);
                 break;
             },
             COMMA_CHAR => {
                 json_wrapper.next();
-                log::debug!("(Dict) Found a comma at index {}", json_wrapper.index);
+                log::trace!("(Dict) Found a comma at index {}", json_wrapper.index);
                 json_wrapper.skip_whitespace();
                 if json_wrapper.current == DICT_END_CHAR {
                     log::warn!("Found a comma followed by a dict end at index {}", json_wrapper.index);
@@ -58,7 +59,7 @@ pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
                     break;
                 }
                 ikey = json_wrapper.find_key();
-                log::info!("Found key: {:?}", ikey);
+                log::debug!("Found key: {:?}", ikey);
                 json_wrapper.skip_whitespace();
                 json_wrapper.skip_colon();
                 continue;
@@ -69,7 +70,7 @@ pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
       
         json_wrapper.skip_whitespace();
         values.insert(ikey.clone(), handle_any(json_wrapper, Some(ikey.clone()))); 
-        debug!("Inserted key \"{}\" at index {}", ikey, json_wrapper.index);
+        trace!("Inserted key \"{}\" at index {}", ikey, json_wrapper.index);
         //values.push(handle_any(json_wrapper, Some(ikey.clone())));  
     }
     
@@ -77,7 +78,7 @@ pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 }
 
 pub fn handle_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
-    log::info!("Processing a list");
+    log::debug!("Processing a list");
     json_wrapper.skip_whitespace();
 
     let mut values: Vec<JsonItem> = Vec::new();
@@ -91,7 +92,7 @@ pub fn handle_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 
         
         if x == LIST_END_CHAR {
-            info!("Found list end at index {}",json_wrapper.index);
+            debug!("Found list end at index {}",json_wrapper.index);
             json_wrapper.next();
             break;
         }
@@ -104,7 +105,7 @@ pub fn handle_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
         json_wrapper.skip_whitespace();
         if x == 0x2C {
             json_wrapper.next();
-            info!("(List) Found a comma at index {}", json_wrapper.index);
+            debug!("(List) Found a comma at index {}", json_wrapper.index);
         }
         
         json_wrapper.skip_whitespace();
@@ -133,7 +134,7 @@ pub fn handle_dict_or_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 
 fn handle_string(json_wrapper: &mut JsonBytesWrapper, quote_char: u8) -> String {
 
-    log::debug!("Processing a string");
+    log::trace!("Processing a string");
     //let mut value: Vec<u8> = Vec::new();
     let mut value_str: String = String::new();
     let mut c: u8;
@@ -144,7 +145,7 @@ fn handle_string(json_wrapper: &mut JsonBytesWrapper, quote_char: u8) -> String 
         
 
         if c == ESCAPE_CHAR {
-            debug!("Found escape char at index {}", json_wrapper.index);
+            trace!("Found escape char at index {}", json_wrapper.index);
 
             value_str.push(c as char);
             value_str.push(json_wrapper.next().unwrap() as char);
@@ -153,7 +154,7 @@ fn handle_string(json_wrapper: &mut JsonBytesWrapper, quote_char: u8) -> String 
         }
 
         if c == quote_char {
-            log::debug!("Found string end at index {}", json_wrapper.index);
+            log::trace!("Found string end at index {}", json_wrapper.index);
             json_wrapper.next();
             break;
         }
@@ -163,12 +164,12 @@ fn handle_string(json_wrapper: &mut JsonBytesWrapper, quote_char: u8) -> String 
 
     }
 
-    log::info!("Extracted string: \"{}\"", value_str);
+    log::debug!("Extracted string: \"{}\"", value_str);
     return value_str;
 }
 
 fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
-    log::debug!("Handling a number at index {}", json_wrapper.index);
+    log::trace!("Handling a number at index {}", json_wrapper.index);
     let mut value: Vec<u8> = Vec::new();
     let mut is_float: bool = false;
     let mut is_signed: bool = false;
@@ -211,7 +212,7 @@ fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
     }
 
     let value_str = std::str::from_utf8(&value).unwrap();
-    log::info!("Extracted number: \"{}\". Float: {}. Current index: {}", value_str, is_float, json_wrapper.index);
+    log::debug!("Extracted number: \"{}\". Float: {}. Current index: {}", value_str, is_float, json_wrapper.index);
     if is_float {
         return JsonItem::Float(value_str.parse().unwrap());    
     }
@@ -220,7 +221,7 @@ fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 }
 
 fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
-    log::debug!("Processing a custom type");
+    log::trace!("Processing a custom type");
 
     let mut type_id: Vec<u8> = Vec::new();
     let quote_char: u8;
@@ -249,11 +250,11 @@ fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) 
     json_wrapper.next();
     let value = handle_string(json_wrapper, quote_char);
     
-    log::info!("Found custom type type \"{}\" with value \"{}\" ", type_id_str, value);
+    log::debug!("Found custom type type \"{}\" with value \"{}\" ", type_id_str, value);
 
     match type_id_str.as_str() {
         DATETIME_ID => {
-            return JsonItem::Datetime(value.parse().unwrap());
+            return JsonItem::Datetime(DateTime::parse_from_rfc3339(&value).unwrap().naive_utc());
         },
         TIMESTAMP_ID => {
             return JsonItem::Timestamp(value.parse().unwrap());
@@ -267,7 +268,7 @@ fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) 
 }
 
 fn handle_null(json_wrapper: &mut JsonBytesWrapper) {
-    log::debug!("Suspecting a null");
+    log::trace!("Suspecting a null");
     //let mut index: usize = json_wrapper.index;
     //let mut type_id: Vec<u8> = Vec::new();
 
@@ -284,12 +285,12 @@ fn handle_null(json_wrapper: &mut JsonBytesWrapper) {
         panic!("Expected a null but instead found \"{}\" at index {}", json_wrapper.current as char, json_wrapper.index);
     }
 
-    log::info!("Found a null");
+    log::debug!("Found a null");
 }
 
 fn handle_bool(json_wrapper: &mut JsonBytesWrapper, _true: bool) {
     if _true {
-        log::debug!("Suspecting true (bool)");
+        log::trace!("Suspecting true (bool)");
         for c in b"true" {
             if !(json_wrapper.current == *c) {
                 panic!("Expected tree (bool) but instead found \"{}\" at index {}", json_wrapper.current as char, json_wrapper.index);
@@ -298,7 +299,7 @@ fn handle_bool(json_wrapper: &mut JsonBytesWrapper, _true: bool) {
         }
     }
     else {
-        log::debug!("Suspecting false (bool)");
+        log::trace!("Suspecting false (bool)");
         for c in b"false" {
             if !(json_wrapper.current == *c) {
                 panic!("Expected tree (bool) but instead found \"{}\" at index {}", json_wrapper.current as char, json_wrapper.index);
@@ -310,7 +311,7 @@ fn handle_bool(json_wrapper: &mut JsonBytesWrapper, _true: bool) {
 
 fn handle_any(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
     let c = json_wrapper.current;
-    log::debug!("Found something starting with {}({}) at index {}", c, c as char, json_wrapper.index);
+    log::trace!("Found something starting with {}({}) at index {}", c, c as char, json_wrapper.index);
     match c {
         // " | '
         0x0022 | 0x0027  => {

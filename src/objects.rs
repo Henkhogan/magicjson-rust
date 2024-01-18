@@ -1,7 +1,8 @@
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDateTime, PyDict, PyInt, PyList, PyFloat, PyString, PyTuple, PyCode, PyAny, PyTzInfo};
+use pyo3::types::{PyBool, PyDateTime, PyFloat, PyString, PyTuple, PyAny};
 use std::collections::HashMap;
-use iso8601::{Date, DateTime as IsoDateTime};
+//use iso8601::{Date, DateTime as IsoDateTime};
+use chrono::{NaiveDateTime, Datelike, Timelike};
 
 pub type JsonKey = String;
 
@@ -17,6 +18,9 @@ impl IntoPy<Py<PyAny>> for JsonCustomType {
     }
 }
 
+
+
+
 //#[pyclass(module="magicjson")]
 #[derive(Clone, Debug)]
 //#[derive(Clone, Debug)]
@@ -29,9 +33,8 @@ pub enum JsonItem {
     Null(), 
     Str(String),
     Custom(JsonCustomType),
-    Datetime(IsoDateTime),
+    Datetime(NaiveDateTime),
     Timestamp(f64),
-    
 }
 
 //#[pymethods]
@@ -60,18 +63,18 @@ impl IntoPy<Py<PyAny>> for JsonItem {
                 return PyString::new(py, &_value).into();
             },
             JsonItem::Datetime(_value) => {
-                match _value.date {
-                    Date::YMD { year, month, day } => {
-                        return PyDateTime::new(
-                            py,
-                            year, month as u8, day as u8, 
-                            _value.time.hour as u8, _value.time.minute as u8, _value.time.second as u8, _value.time.millisecond*1000, None // ToDo: handle TZ PyTzInfo::from(py, _value.time.tz_offset_hours*60*60+_value.time.tz_offset_minutes*60, false, None)
-                        ).unwrap().into();
-                    },
-                    _ => {
-                        panic!("Unsupported date format");
-                    }
-                }
+                
+                return PyDateTime::new(
+                    py,
+                    _value.date().year() as i32,
+                    _value.date().month() as u8,
+                    _value.date().day() as u8,
+                    _value.time().hour() as u8,
+                    _value.time().minute() as u8,
+                    _value.time().second() as u8,
+                    _value.timestamp_subsec_micros(),
+                    None,
+                ).unwrap().into();
             },
             JsonItem::Timestamp(_value) => {
                 return PyDateTime::from_timestamp(py, _value, None).unwrap().into();
