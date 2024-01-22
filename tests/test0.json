@@ -4,7 +4,8 @@
         "str1key": "str1value",
         "int1key": 0,
         "children": ["l1", "l2", "l3", "l4", "l5", "l6", "l7", "l8"],
-        "datetime": "2019-01-01T00:00:00Z",
+        "datetime1": "2019-01-01T00:00:00Z",
+        "datetime2": "2019-01-01T00:00:00+01:00",
         "l1": {
             "null1": null,
             "bool1": false
