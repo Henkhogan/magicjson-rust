@@ -1,4 +1,3 @@
-use pyo3::prelude::*;
 use std::io::Read;
 use std::fs;
 
@@ -19,8 +18,7 @@ extern crate lazy_static;
 
 
 /// Formats the sum of two numbers as string.
-#[pyfunction]
-fn load_file(file_path: String) -> JsonItem {
+pub fn load_file(file_path: String) -> JsonItem {
 
     let mut bufreader = std::io::BufReader::new(fs::File::open(&file_path).unwrap()).bytes();   
     
@@ -38,46 +36,3 @@ fn load_file(file_path: String) -> JsonItem {
 }
 
 
-
-
-#[pyfunction]
-fn loads(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
-}
-
-#[pyfunction]
-fn dump(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
-}
-
-#[pyfunction]
-fn dumps(a: usize, b: usize) -> PyResult<String> {
-    Ok((a + b).to_string())
-}
-
-/// A Python module implemented in Rust.
-#[pymodule]
-fn magicjson(_py: Python, m: &PyModule) -> PyResult<()> {
-    
-    //Builder::new()
-    //.format(|buf, record| {
-    //    writeln!(buf,
-    //        "{} [{}] - {}",
-    //        Local::now().format("%Y-%m-%dT%H:%M:%S"),
-    //        record.level(),
-    //        record.args()
-    //    )
-    //})
-    //.filter(None, LevelFilter::Debug)
-    //.init();
-
-    pyo3_log::init();
-
-
-
-    m.add_function(wrap_pyfunction!(load_file, m)?)?;
-    m.add_function(wrap_pyfunction!(loads, m)?)?;
-    m.add_function(wrap_pyfunction!(dump, m)?)?;
-    m.add_function(wrap_pyfunction!(dumps, m)?)?;
-    Ok(())
-}
