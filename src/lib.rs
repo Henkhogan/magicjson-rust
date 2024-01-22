@@ -5,7 +5,7 @@ mod wrapper;
 use wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
 mod objects;
-use objects::{JsonItem, JsonKey};
+use objects::{JsonItem, JsonKey, JsonCustomType};
 
 mod handler;
 use handler::handle_dict_or_list;
