@@ -17,7 +17,7 @@ extern crate lazy_static;
 
 
 
-/// Formats the sum of two numbers as string.
+/// Reads a JSON file and returns a JsonItem
 pub fn load_file(file_path: String) -> JsonItem {
 
     let mut bufreader = std::io::BufReader::new(fs::File::open(&file_path).unwrap()).bytes();   

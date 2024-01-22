@@ -1,2 +1,0 @@
-[profile.release]         # Modify profile settings via config.
-//debug-assertions = false  # Enables debug assertions.
