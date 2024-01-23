@@ -13,7 +13,7 @@ use crate::wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 //use iso8601::{DateTime as IsoDateTime};
 use chrono::DateTime;
 
-pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
+pub fn handle_dict<T>(json_wrapper: &mut JsonBytesWrapper) -> T where T: From<JsonItem>{
 
     trace!("Found a dict");
     json_wrapper.skip_whitespace();
@@ -73,11 +73,10 @@ pub fn handle_dict(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
         trace!("Inserted key \"{}\" at index {}", ikey, json_wrapper.index);
         //values.push(handle_any(json_wrapper, Some(ikey.clone())));  
     }
-    
-    return JsonItem::Dict(values);  
+    return T::from(JsonItem::Dict(values));
 }
 
-pub fn handle_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
+pub fn handle_list<T>(json_wrapper: &mut JsonBytesWrapper) -> T where T: From<JsonItem> {
     log::debug!("Processing a list");
     json_wrapper.skip_whitespace();
 
@@ -112,12 +111,11 @@ pub fn handle_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 
         values.push(handle_any(json_wrapper, None));
     }
-
-    return JsonItem::List(values);
+    return T::from(JsonItem::List(values));
 }
 
 
-pub fn handle_dict_or_list(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
+pub fn handle_dict_or_list<T>(json_wrapper: &mut JsonBytesWrapper) -> T where T: From<JsonItem> {
     match json_wrapper.current {
         DICT_START_CHAR => {
             return handle_dict(json_wrapper);
@@ -220,7 +218,7 @@ fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 
 }
 
-fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
+fn handle_custom_type<T>(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> T where T: From<JsonItem>, T: From<JsonItem> {
     log::trace!("Processing a custom type");
 
     let mut type_id: Vec<u8> = Vec::new();
@@ -254,13 +252,13 @@ fn handle_custom_type(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) 
 
     match type_id_str.as_str() {
         DATETIME_ID => {
-            return JsonItem::Datetime(DateTime::parse_from_rfc3339(&value).unwrap().naive_utc());
+            return T::from(JsonItem::Datetime(DateTime::parse_from_rfc3339(&value).unwrap().naive_utc()));
         },
         TIMESTAMP_ID => {
-            return JsonItem::Timestamp(value.parse().unwrap());
+            return T::from(JsonItem::Timestamp(value.parse().unwrap()));
         },
         _ => {
-            return JsonItem::Custom(JsonCustomType{name: type_id_str, value: value});
+            return T::from(JsonItem::Custom(JsonCustomType{name: type_id_str, value: value}));
         }
         
     }
@@ -309,33 +307,33 @@ fn handle_bool(json_wrapper: &mut JsonBytesWrapper, _true: bool) {
     }   
 }
 
-fn handle_any(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> JsonItem {
+fn handle_any<T>(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> T where T: From<JsonItem> {
     let c = json_wrapper.current;
     log::trace!("Found something starting with {}({}) at index {}", c, c as char, json_wrapper.index);
     match c {
         // " | '
         0x0022 | 0x0027  => {
             json_wrapper.next(); // Skipping the quote char
-            return JsonItem::Str(handle_string(json_wrapper, c));
+            return T::from(JsonItem::Str(handle_string(json_wrapper, c)));
         },
         // Numbers - ToDo: Use arrays
         _ if DIGIT_CHARS.contains(&c) || [DOT_CHAR | MINUS_CHAR | PLUS_CHAR].contains(&c) => {
-            return handle_number(json_wrapper);
+            return T::from(handle_number(json_wrapper));
         },
         // Null
         0x6e => {
             handle_null(json_wrapper);
-            return JsonItem::Null();
+            return T::from(JsonItem::Null());
         },
         // Bool: false
         0x66 => {
             handle_bool(json_wrapper, false);
-            return JsonItem::Bool(false);
+            return T::from(JsonItem::Bool(false));
         }
         // Bool: true
         0x74 => {
             handle_bool(json_wrapper, true);
-            return JsonItem::Bool(true);
+            return T::from(JsonItem::Bool(true));
         }
         // Custom
         0x40 => {

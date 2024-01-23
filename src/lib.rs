@@ -4,7 +4,7 @@ use std::fs;
 mod wrapper;
 use wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
-mod objects;
+pub mod objects;
 use objects::{JsonItem, JsonKey, JsonCustomType};
 
 mod handler;
@@ -18,7 +18,7 @@ extern crate lazy_static;
 
 
 /// Reads a JSON file and returns a JsonItem
-pub fn load_file(file_path: String) -> JsonItem {
+pub fn load_file<T>(file_path: String) -> T where T: From<JsonItem> {
 
     let mut bufreader = std::io::BufReader::new(fs::File::open(&file_path).unwrap()).bytes();   
     
