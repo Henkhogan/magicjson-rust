@@ -1,16 +1,18 @@
-use std::{collections::HashMap, io::Read};
+use std::io::Read;
 use std::fs;
 
 mod wrapper;
 use wrapper::{JsonBytesWrapper, JsonWrapperTrait};
 
 pub mod objects;
-use objects::{JsonItem, JsonKey, JsonCustomType};
+use objects::{JsonItem, JsonKey};
+pub use objects::JsonCustomType;
 
-mod handler;
-use handler::handle_dict_or_list;
 
-mod serializer;
+mod deserialize;
+use deserialize::handle_dict_or_list;
+
+mod serialize;
 
 mod constants;
 
@@ -46,10 +48,13 @@ pub fn load_file<T>(file_path: String) -> T where T: From<JsonItem> {
 
 #[cfg(test)]#[cfg(test)]
 mod tests {
-    use crate::serializer::JsonSerializable;
+
+    use crate::serialize::{JsonSerializable};
+
+    use self::serialize::ToJsonString;
 
     use super::*;
-    use std::collections::HashMap;
+    use std::{any::Any, collections::{BTreeMap, HashMap}, fmt::Display};
 
     #[test]
     fn test_load_file() {
@@ -59,6 +64,7 @@ mod tests {
         // Check the result
         match result {
             JsonItem::Dict(dict) => {
+                //let dict0 = dict.get("dict0").unwrap();
                 assert_eq!(dict.len(), 1);
                 //assert_eq!(dict.get("key").unwrap(), "value1");
             },
@@ -67,15 +73,62 @@ mod tests {
     }
 
     #[test]
-    fn test_serialize_any() {
+    fn test_serialize_jsonserializable() {
         // Create a HashMap
-        let mut map = HashMap::new();
-        map.insert("key".to_string(), "value1".to_string());
+        let mut map: BTreeMap<String, JsonSerializable> = BTreeMap::new();
+        map.insert("array".to_string(), JsonSerializable::Vec(vec![JsonSerializable::I32(1), JsonSerializable::I32(2)]));
+        map.insert("bool".to_string(), JsonSerializable::Bool(true));
+        map.insert("btreemap".to_string(), JsonSerializable::BTreeMap(BTreeMap::new()));
+        map.insert("float".to_string(), JsonSerializable::F32(123.456));
+        map.insert("hashmap".to_string(), JsonSerializable::HashMap(HashMap::new()));
+        map.insert("int".to_string(), JsonSerializable::I32(123));
+        map.insert("string".to_string(), JsonSerializable::String("value1".to_string()));
+        map.insert("null".to_string(), JsonSerializable::Null);
+
+        let result: JsonSerializable = map.into();
+        let serialzed = result.to_string(); 
+
+        // Check the result
+        assert_eq!(serialzed, r#"{"array":[1,2],"bool":true,"btreemap":{},"float":123.456,"hashmap":{},"int":123,"null":null,"string":"value1"}"#.to_string());
+    }
+
+    #[test]
+    fn test_serialize_stringhashmap() {
+        // Create a HashMap
+        let mut map: BTreeMap<String, String> = BTreeMap::new();
+        map.insert("string1key".to_string(), "string1value".to_string());
+        map.insert("string2key".to_string(), "string2value".to_string());
+        
 
         // Call serialize_any function
         let result: JsonSerializable = map.into();
+        let serialzed = result.to_string();
+        assert_eq!(serialzed, r#"{"string1key":"string1value","string2key":"string2value"}"#.to_string())
+    }
+
+   
+
+    #[test]
+    fn test_serialize_boxhashmap() {
+        // Create a HashMap
+        let mut map: BTreeMap<String, Box<dyn ToJsonString>> = BTreeMap::new();
+        map.insert("array".to_string(), Box::new(vec![1,2]) as Box<Vec<i32>>);
+        map.insert("bool".to_string(), Box::new(true));
+        map.insert("btreemap".to_string(), Box::new(BTreeMap::<String, Box<dyn ToJsonString>>::new()) as Box<dyn ToJsonString>);
+        map.insert("float".to_string(), Box::new(123.456));
+        map.insert("hashmap".to_string(), Box::new(HashMap::<String, Box<dyn ToJsonString>>::new()) as Box<dyn ToJsonString>);
+        map.insert("int".to_string(), Box::new(123));
+        map.insert("null".to_string(), Box::new(None::<JsonSerializable>) as Box<dyn ToJsonString> );
+        map.insert("string".to_string(), Box::new("value1".to_string()));
+
+
+        // Call serialize_any function
+        let result: JsonSerializable = map.to_json();
+        let serialized = result.to_string(); 
+
+
 
         // Check the result
-        assert_eq!(result.to_string(), r#"{"key":"value1"}"#);
-    }
+        assert_eq!(serialized, r#"{"array":[1,2],"bool":true,"btreemap":{},"float":123.456,"hashmap":{},"int":123,"null":null,"string":"value1"}"#.to_string());
+    }//
 }

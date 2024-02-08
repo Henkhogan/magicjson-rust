@@ -42,5 +42,6 @@ mod tests {
 
         // Check the result
         assert_eq!(result, r#"{"key":"value1"}"#);
+        println!("{}", result);
     }
 }

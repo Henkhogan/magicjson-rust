@@ -69,9 +69,8 @@ pub fn handle_dict<T>(json_wrapper: &mut JsonBytesWrapper) -> T where T: From<Js
         }
       
         json_wrapper.skip_whitespace();
-        values.insert(ikey.clone(), handle_any(json_wrapper, Some(ikey.clone()))); 
+        values.insert(ikey.clone(), handle_any(json_wrapper)); 
         trace!("Inserted key \"{}\" at index {}", ikey, json_wrapper.index);
-        //values.push(handle_any(json_wrapper, Some(ikey.clone())));  
     }
     return T::from(JsonItem::Dict(values));
 }
@@ -109,7 +108,7 @@ pub fn handle_list<T>(json_wrapper: &mut JsonBytesWrapper) -> T where T: From<Js
         
         json_wrapper.skip_whitespace();
 
-        values.push(handle_any(json_wrapper, None));
+        values.push(handle_any(json_wrapper));
     }
     return T::from(JsonItem::List(values));
 }
@@ -218,7 +217,7 @@ fn handle_number(json_wrapper: &mut JsonBytesWrapper) -> JsonItem {
 
 }
 
-fn handle_custom_type<T>(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> T where T: From<JsonItem>, T: From<JsonItem> {
+fn handle_custom_type<T>(json_wrapper: &mut JsonBytesWrapper) -> T where T: From<JsonItem>, T: From<JsonItem> {
     log::trace!("Processing a custom type");
 
     let mut type_id: Vec<u8> = Vec::new();
@@ -307,7 +306,7 @@ fn handle_bool(json_wrapper: &mut JsonBytesWrapper, _true: bool) {
     }   
 }
 
-fn handle_any<T>(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> T where T: From<JsonItem> {
+fn handle_any<T>(json_wrapper: &mut JsonBytesWrapper) -> T where T: From<JsonItem> {
     let c = json_wrapper.current;
     log::trace!("Found something starting with {}({}) at index {}", c, c as char, json_wrapper.index);
     match c {
@@ -337,7 +336,7 @@ fn handle_any<T>(json_wrapper: &mut JsonBytesWrapper, key: Option<String>) -> T 
         }
         // Custom
         0x40 => {
-            return handle_custom_type(json_wrapper, key);            
+            return handle_custom_type(json_wrapper);            
         },
         _ => {
             return handle_dict_or_list(json_wrapper)

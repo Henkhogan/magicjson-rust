@@ -7,13 +7,25 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Cargo test",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--lib"
+                ]
+            },
+            "args": []
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug integration test 'test'",
             "cargo": {
                 "args": [
                     "test",
                     "--no-run",
-                    "--test=test",
-                    "--package=magicjson-rust"
+                    "--workspace",
                 ],
                 "filter": {
                     "name": "test",
